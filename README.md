@@ -1,114 +1,164 @@
-# Kafka Connect S3 Sink
+# Kafka Connect S3
 
-This is a [kafka-connect](http://kafka.apache.org/documentation.html#connect) sink for Amazon S3, without any dependency on HDFS/Hadoop libraries or data formats.
+[![CircleCI](https://circleci.com/gh/spredfast/kafka-connect-s3.svg?style=shield)](https://circleci.com/gh/spredfast/kafka-connect-s3)
 
-## Status
+[![Maven Central](https://maven-badges.herokuapp.com/maven-central/com.spredfast.kafka.connect.s3/kafka-connect-s3/badge.svg?style=plastic)](https://maven-badges.herokuapp.com/maven-central/com.spredfast.kafka.connect.s3/kafka-connect-s3)
 
-This is pre-production code. Use at your own risk.
+This is a [kafka-connect](http://kafka.apache.org/documentation.html#connect) sink and source for Amazon S3, but without any dependency on HDFS/hadoop libs or data formats.
 
-That said, we've put some effort into a reasonably thorough test suite and will be putting it into production shortly. We will update this notice when we have it running smoothly in production.
+Key Features:
 
-If you use it, you will likely find issues or ways it can be improved. Please feel free to create pull requests/issues and we will do our best to merge anything that helps overall (especially if it has passing tests ;)).
+ * Block GZip output - This keeps storage costs low.
+ * Accurately reflects source topic - The original partition and offset of your records are recorded in S3. This allows you to:
+ * Easily read from a specific topic and partition - Index files make reading a particular offset very efficient, so you only have to download the data that you need.
+ * Seek to a date & time - Your bucket will be broken into daily prefixes, which makes it possible to find data that was written around a specific date and time.
 
-This was built against Kafka 0.10.1.1.
+## Spredfast Fork
 
-## Block-GZIP Output Format
+This is a hard fork of the [S3 Sink created by DeviantArt](https://github.com/DeviantArt/kafka-connect-s3).
 
-For now there is just one output format which is essentially just a GZIPed text file with one Kafka message per line.
+Notable differences:
+ * Requires Java 8+
+ * Requires Kafka 0.10.0+
+ * Supports Binary and Custom Output Formats
+ * Provides a Source for reading data back from S3
+ * Repackaged and built with Gradle
 
-It's actually a little more sophisticated than that though. We exploit a property of GZIP whereby multiple GZIP encoded files can be concatenated to produce a single file. Such a concatenated file is a valid GZIP file in its own right and will be decompressed by _any GZIP implementation_ to a single stream of lines -- exactly as if the input files were concatenated first and compressed together.
+We are very grateful to the DeviantArt team for their original work.
+We made the decision to hard fork when it became clear that we would be responsible for ongoing maintenance.
 
-### Rationale
+## Changelog
 
-This allows us to keep chunk files large which is good for the most common batch/ETL workloads, while enabling relatively efficient access if needed.
+ * 0.4.0
+ 	 * BREAKING CHANGE: Changed the way S3Source offsets are stored to accommodate multiple topics in the same
+ 	   day prefix. Not compatible with old offsets.
 
-If we sized each file at say 64MB then operating on a week's data might require downloading 10s or 100s of thousands of separate S3 objects which has non-trivial overhead compared to a few hundred. It also costs more to list bucket contents when you have millions of objects for a relatively short time period since S3 list operations can only return 1000 at once. So we wanted chunks around 1GB in size for most cases.
+## Usage
 
-But in some rarer cases, we might want to resume processing from a specific offset in middle of a block, or pull just a few records at a specific offset. Rather than pull the whole 1GB chunk each time we need that, this scheme allows us to quickly find a much smaller chunk to satisfy the read.
+***NOTE***: You want to use the shadow jar produced by this project.
+As a gradle dependency, it is `com.spredfast.kafka.connect.s3:kafka-connect-s3:0.4.0:shadow`.
+The shadow jar ensures there are no conflicts with other libraries.
 
-We use a chunk threshold of 64MB by default although it's configurable. Keep in mind this is 64MB of _uncompressed_ input records, so the actual block within the file is likely to be significantly smaller depending on how compressible your data is.
+Use just like any other Connector: add it to the Connect classpath and configure a task. Read the rest of this document for configuration details.
 
-Also note that while we don't anticipate random reads being common, this format is very little extra code and virtually no size/performance overhead compared with just GZIPing big chunks so it's a neat option to have.
+## Important Configuration
 
-### Example
+Only bytes may be written to S3, so you *must* configure the Sink & Source connectors to "convert" to bytes.
 
-We output 2 files per chunk
+### Worker vs. Connector Settings
 
-```
-$ tree system_test/data/connect-system-test/systest/2016-02-24/
-system_test/data/connect-system-test/systest/2016-02-24/
-├── system-test-00000-000000000000.gz
-├── system-test-00000-000000000000.index.json
-├── system-test-00000-000000000100.gz
-├── system-test-00000-000000000100.index.json
-├── system-test-00000-000000000200.gz
-├── system-test-00000-000000000200.index.json
-├── system-test-00001-000000000000.gz
-├── system-test-00001-000000000000.index.json
-├── system-test-00002-000000000000.gz
-└── system-test-00002-000000000000.index.json
-```
- - the actual *.gz file which can be read and treated as a plain old gzip file on it's own
- - a *.index.json file which described the byte positions of each "block" inside the file
+There are important settings for your Kafka Connect cluster itself, and important settings for individual connectors.
+The following puts cluster settings in `connect-worker.properties` and individual Connector settings in their respective files.
 
-If you don't care about seeking to specific offsets efficiently then ignore the index files and just use the *.gz as if it's a plain old gzip file.
+### Recommended Worker Configs
 
-Note file name format is: `<topic name>-<zero-padded partition>-<zero-padded offset of first record>.*`. That implies that if you exceed 10k partitions in a topic or a trillion message in a single partition, the files will no longer sort naturally. In practice that is probably not a big deal anyway since we prefix with upload date too to make listing recent files easier. Making padding length configurable is an option. It's mostly makes things simpler to eyeball with low numbers where powers of ten change fast anyway.
+connect-worker.properties:
 
-If you want to have somewhat efficient seeking to particular offset though, you can do it like this:
- - List bucket contents and locate the chunk that the offset is in
- - Download the `*.index.json` file for that chunk, it looks something like this (note these are artificially small chunks):
-```
-$ cat system-test-00000-000000000000.index.json | jq -M '.'
-{
-  "chunks": [
-    {
-      "byte_length_uncompressed": 2890,
-      "num_records": 100,
-      "byte_length": 275,
-      "byte_offset": 0,
-      "first_record_offset": 0
-    },
-    {
-      "byte_length_uncompressed": 3121,
-      "num_records": 123,
-      "byte_length": 325,
-      "byte_offset": 275,
-      "first_record_offset": 100
-    },
-    ...
-  ]
-}
-```
- - Iterate through the "chunks" described in the index. Each has a `first_record_offset` and `num_records` so you can work out if the offset you want to find is in that chunk.
-  - `first_record_offset` is the absolute kafka topic-partition offset of the first message in the chunk. Hence the first chunk in the index will always have the same `first_record_offset` as the offset in the file name - `0` in this case.
- - When you've found the correct chunk, use the `byte_offset` and `byte_length` fields to make a [range request](https://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html#sec14.35) to S3 to download only the block you care about.
-  - Depending on your needs you can either limit to just the single block, or if you want to consume all records after that offset, you can consume from the offset right to the end of the file
- - The range request bytes can be decompressed as a GZIP file on their own with any GZIP compatible tool, provided you limit to whole block boundaries.
+    # too many records can overwhelm the poll loop on large topics and will result in
+    # Connect continously rebalancing without making progress
+    consumer.max.poll.records=500
+    # Flushing to S3 can take some time, so allow for more than the default 5 seconds when shutting down.
+    task.shutdown.graceful.timeout.ms=30000
 
-## Other Formats
+### 0.10.1.0+
 
-For now we only support Block-GZIP output. This assumes that all your kafka messages can be output as newline-delimited text files.
+Connect 0.10.1.0 introduced the ability to specify converters at the connector level, so you should specify the `AlreadyBytesConverter` for both the sink and source.
 
-We could make the output format pluggable if others have use for this connector, but need binary serialisation formats like Avro/Thrift/Protobuf etc. Pull requests welcome.
+connect-s3/sink.properties:
+
+    key.converter=com.spredfast.kafka.connect.s3.AlreadyBytesConverter
+    value.converter=com.spredfast.kafka.connect.s3.AlreadyBytesConverter
+
+### Pre 0.10.1.0
+
+On older Connect versions only the worker [key and value converters](http://docs.confluent.io/2.0.0/connect/userguide.html#common-worker-configs) can be configured, so to get raw bytes for S3 you must either:
+
+ 1. Configure your cluster converter to leave records as raw bytes:
+
+     connect-worker.properties:
+
+        key.converter=com.spredfast.kafka.connect.s3.AlreadyBytesConverter
+        value.converter=com.spredfast.kafka.connect.s3.AlreadyBytesConverter
+
+ 2. Provide the S3 connector with the same converter (to reverse the process.) e.g.,
+
+     connect-worker.properties:
+
+        key.converter=org.apache.kafka.connect.json.JsonConverter
+        value.converter=org.apache.kafka.connect.json.JsonConverter
+
+     connect-s3-sink/sink.properties:
+
+        key.converter=org.apache.kafka.connect.json.JsonConverter
+        value.converter=org.apache.kafka.connect.json.JsonConverter
+
+See the [wiki](https://github.com/spredfast/kafka-connect-s3/wiki) for further details.
 
 ## Build and Run
 
-You should be able to build this with `mvn package`. Once the jar is generated in target folder include it in  `CLASSPATH` (ex: for Mac users,export `CLASSPATH=.:$CLASSPATH:/fullpath/to/kafka-connect-s3-jar` )
+You should be able to build this with `./gradlew shadowJar`. Once the jar is generated in build/libs, include it in `CLASSPATH` (e.g., export `CLASSPATH=.:$CLASSPATH:/fullpath/to/kafka-connect-s3-jar` )
 
 Run: `bin/connect-standalone.sh  example-connect-worker.properties example-connect-s3-sink.properties`(from the root directory of project, make sure you have kafka on the path, if not then give full path of kafka before `bin`)
 
+## S3 File Format
 
-There is a script `local-run.sh` which you can inspect to see how to get it running. This script relies on having a local kafka instance setup as described in testing section below.
+The default file format is a UTF-8, newline delimited text file. This works well for JSON records, but is unsafe for other formats that
+  may contain newlines or any arbitrary byte sequence.
+
+### Binary Records
+
+The binary output encodes values (and optionally keys) with a 4 byte length, followed by the value. Any record can be safely encoded this way.
+
+```
+format=binary
+format.include.keys=true
+```
+
+NOTE: It is critical that the format settings in the S3 Source match the setting of the S3 Sink exactly, otherwise keys, values, and record contents will be corrupted.
+
+### Custom Delimiters
+
+The default format is text, with UTF-8 newlines between records. Keys are dropped. The delimiters and inclusion of keys can be customized:
+
+```
+# this line may be omitted
+format=text
+# default delimiter is a newline
+format.value.delimiter=\n
+# UTF-8 is the default encoding
+format.value.encoding=UTF-16BE
+# keys will only be written if a delimiter is specified
+format.key.delimiter=\t
+format.key.encoding=UTF-16BE
+```
+
+NOTE: Only the delimiter you specify is encoded. The bytes of the records will be written unchanged.
+ The purpose of the config is to match the delimiter to the record encoding.
+
+Charsets Tip: If using UTF-16, specify `UTF-16BE` or `UTF-16LE` to avoid including an addition 2 byte [BOM](https://en.wikipedia.org/wiki/Byte_order_mark#UTF-16)
+  for every key and value.
+
+### Custom Format
+
+A custom [S3RecordFormat](https://github.com/spredfast/kafka-connect-s3/blob/master/api/src/main/java/com/spredfast/kafka/connect/s3/S3RecordFormat.java)
+can be specified by providing the class name:
+
+```
+format=com.mycompany.MyS3RecordFormatImpl
+format.prop1=abc
+```
+
+Refer to the [S3 Formats wiki](https://github.com/spredfast/kafka-connect-s3/wiki/S3-Formats) for more information.
 
 ## Configuration
 
-In addition to the [standard kafka-connect config options](http://kafka.apache.org/documentation.html#connectconfigs) we support/require the following, in the task properties file or REST config:
+In addition to the [standard kafka-connect config options](http://kafka.apache.org/documentation.html#connectconfigs)
+and [format settings](https://github.com/spredfast/kafka-connect-s3/wiki/Sink-Configurations)
+ we support/require the following, in the task properties file or REST config:
 
 | Config Key | Default | Notes |
 | ---------- | ------- | ----- |
 | s3.bucket | **REQUIRED** | The name of the bucket to write too. |
-| local.buffer.dir | **REQUIRED** | Directory to store buffered data in. Must exist. |
 | s3.prefix | `""` | Prefix added to all object keys stored in bucket to "namespace" them. |
 | s3.endpoint | AWS defaults per region | Mostly useful for testing. |
 | s3.path_style | `false` | Force path-style access to bucket rather than subdomain. Mostly useful for tests. |
@@ -116,20 +166,16 @@ In addition to the [standard kafka-connect config options](http://kafka.apache.o
 
 Note that we use the default AWS SDK credentials provider. [Refer to their docs](http://docs.aws.amazon.com/AWSSdkDocsJava/latest/DeveloperGuide/credentials.html#id1) for the options for configuring S3 credentials.
 
-## Testing
+These additional configs apply to the Source connector:
 
-Most of the custom logic for handling output formatting, and managing S3 has reasonable mocked unit tests. There are probably improvements that can be made, but the logic is not especially complex.
+| Config Key | Default | Notes |
+| ---------- | ------- | ----- |
+| max.poll.records | 1000 | The number of records to return in a single poll of S3 |
+| s3.page.size | 100 | The number of objects we list from S3 in one request |
+| max.partition.count | 200 | The maximum number of partitions a topic can have. Partitions over this number will not be processed. |
+| targetTopic.${original} | none | If you want the source to send records to an different topic than the original. e.g., targetTopic.foo=bar would send messages originally in topic foo to topic bar. |
+| s3.start.marker | `null` | [List-Object Marker](http://docs.aws.amazon.com/cli/latest/reference/s3api/list-objects.html#output). S3 object key or key prefix to start reading from. |
 
-There is also a basic system test to validate the integration with kafka-connect. This is not complete nor is it 100% deterministic due to the vagaries of multiple systems with non-deterministic things like timers effecting behaviour.
+## Contributing
 
-But it does consistently pass when run by hand on my Mac and validates basic operation of:
-
- - Initialisation and consuming/flushing all expected data
- - Resuming correctly on restart based on S3 state not relying on local disk state
- - Reconfiguring partitions of a topic and correctly resuming each
-
-It doesn't test distributed mode operation yet, however the above is enough to exercise all of the integration points with the kafka-connect runtime.
-
-### System Test Setup
-
-See [the README in the system_test dir](/system_test/README.md) for details on setting up dependencies and environment to run the tests.
+Pull requests welcome! If you need ideas, check the issues for [open enhancements](https://github.com/spredfast/kafka-connect-s3/issues?q=is%3Aopen+is%3Aissue+label%3Aenhancement).

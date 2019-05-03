@@ -1,0 +1,12 @@
+{
+  "namespace": "com.s3.avro",
+  "type": "record",
+  "name": "KafkaMessage",
+  "fields" : [
+    {"name": "offset", "type": "long"},
+    {"name": "timestamp", "type": "long"},
+    {"name": "headers", "type": {"type": "map", "values": "bytes"}},
+    {"name": "key", "type": "bytes"},
+    {"name": "value", "type": "bytes"}
+  ]
+}

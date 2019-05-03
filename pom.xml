@@ -45,6 +45,27 @@
           </execution>
         </executions>
       </plugin>
+			<plugin>
+				<groupId>org.apache.avro</groupId>
+				<artifactId>avro-maven-plugin</artifactId>
+				<version>${avro.version}</version>
+				<executions>
+					<execution>
+						<id>schemas</id>
+						<phase>generate-sources</phase>
+						<goals>
+							<goal>schema</goal>
+						</goals>
+						<configuration>
+							<excludes>
+								<exclude>**/mapred/tether/**</exclude>
+							</excludes>
+							<sourceDirectory>${project.basedir}/src/main/avro/</sourceDirectory>
+							<testSourceDirectory>${project.basedir}/src/test/avro/</testSourceDirectory>
+						</configuration>
+					</execution>
+				</executions>
+			</plugin>      
     </plugins>
   </build>
 
@@ -52,6 +73,7 @@
     <kafka.version>2.2.0</kafka.version>
     <s3.version>1.11.543</s3.version>
     <guava.version>18.0</guava.version>
+    <avro.version>1.8.2</avro.version>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
   </properties>
 
@@ -76,6 +98,11 @@
       <artifactId>aws-java-sdk-s3</artifactId>
       <version>${s3.version}</version>
     </dependency>
+	<dependency>
+   		<groupId>org.apache.avro</groupId>
+    	<artifactId>avro</artifactId>
+    	<version>${avro.version}</version>
+	</dependency>    
     <dependency>
       <groupId>junit</groupId>
       <artifactId>junit</artifactId>
