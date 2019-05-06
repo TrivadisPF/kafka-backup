@@ -3,6 +3,7 @@
   "type": "record",
   "name": "KafkaMessage",
   "fields" : [
+    {"name": "partition", "type": "int"},
     {"name": "offset", "type": "long"},
     {"name": "timestamp", "type": "long"},
     {"name": "headers", "type": {"type": "map", "values": "bytes"}},
