@@ -1,4 +1,4 @@
-# Kafka Connect S3
+# Kafka Connect S3 (work in progress)
 
 [![CircleCI](https://circleci.com/gh/spredfast/kafka-connect-s3.svg?style=shield)](https://circleci.com/gh/spredfast/kafka-connect-s3)
 
@@ -13,25 +13,24 @@ Key Features:
  * Easily read from a specific topic and partition - Index files make reading a particular offset very efficient, so you only have to download the data that you need.
  * Seek to a date & time - Your bucket will be broken into daily prefixes, which makes it possible to find data that was written around a specific date and time.
 
-## Spredfast Fork
+## Trivaids Fork
 
-This is a hard fork of the [S3 Sink created by DeviantArt](https://github.com/DeviantArt/kafka-connect-s3).
+This is a hard fork of the [S3 Sink created by Spredfast](https://github.com/Spredfast/kafka-connect-s3).
 
 Notable differences:
  * Requires Java 8+
- * Requires Kafka 0.10.0+
- * Supports Binary and Custom Output Formats
- * Provides a Source for reading data back from S3
- * Repackaged and built with Gradle
+ * Uses Kafka 2.2.0 library
+ * Supports Avro Format
+ * Not only key and value are backedup but also Offset, Timestamp and Header Properties
+ * Repackaged and built with Maven
 
-We are very grateful to the DeviantArt team for their original work.
+We are very grateful to the Spredfast team for their original work.
 We made the decision to hard fork when it became clear that we would be responsible for ongoing maintenance.
 
 ## Changelog
 
- * 0.4.0
- 	 * BREAKING CHANGE: Changed the way S3Source offsets are stored to accommodate multiple topics in the same
- 	   day prefix. Not compatible with old offsets.
+ * 0.1.0
+ 	 * Initial release (work in progress)
 
 ## Usage
 
@@ -59,38 +58,6 @@ connect-worker.properties:
     consumer.max.poll.records=500
     # Flushing to S3 can take some time, so allow for more than the default 5 seconds when shutting down.
     task.shutdown.graceful.timeout.ms=30000
-
-### 0.10.1.0+
-
-Connect 0.10.1.0 introduced the ability to specify converters at the connector level, so you should specify the `AlreadyBytesConverter` for both the sink and source.
-
-connect-s3/sink.properties:
-
-    key.converter=com.spredfast.kafka.connect.s3.AlreadyBytesConverter
-    value.converter=com.spredfast.kafka.connect.s3.AlreadyBytesConverter
-
-### Pre 0.10.1.0
-
-On older Connect versions only the worker [key and value converters](http://docs.confluent.io/2.0.0/connect/userguide.html#common-worker-configs) can be configured, so to get raw bytes for S3 you must either:
-
- 1. Configure your cluster converter to leave records as raw bytes:
-
-     connect-worker.properties:
-
-        key.converter=com.spredfast.kafka.connect.s3.AlreadyBytesConverter
-        value.converter=com.spredfast.kafka.connect.s3.AlreadyBytesConverter
-
- 2. Provide the S3 connector with the same converter (to reverse the process.) e.g.,
-
-     connect-worker.properties:
-
-        key.converter=org.apache.kafka.connect.json.JsonConverter
-        value.converter=org.apache.kafka.connect.json.JsonConverter
-
-     connect-s3-sink/sink.properties:
-
-        key.converter=org.apache.kafka.connect.json.JsonConverter
-        value.converter=org.apache.kafka.connect.json.JsonConverter
 
 See the [wiki](https://github.com/spredfast/kafka-connect-s3/wiki) for further details.
 
