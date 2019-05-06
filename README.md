@@ -1,4 +1,4 @@
-# Kafka Connect S3
+# Kafka Connect S3 (work in progress)
 
 [![CircleCI](https://circleci.com/gh/spredfast/kafka-connect-s3.svg?style=shield)](https://circleci.com/gh/spredfast/kafka-connect-s3)
 
@@ -13,7 +13,7 @@ Key Features:
  * Easily read from a specific topic and partition - Index files make reading a particular offset very efficient, so you only have to download the data that you need.
  * Seek to a date & time - Your bucket will be broken into daily prefixes, which makes it possible to find data that was written around a specific date and time.
 
-## Spredfast Fork
+## Trivaids Fork
 
 This is a hard fork of the [S3 Sink created by Spredfast](https://github.com/Spredfast/kafka-connect-s3).
 
@@ -30,7 +30,7 @@ We made the decision to hard fork when it became clear that we would be responsi
 ## Changelog
 
  * 0.1.0
- 	 * Initial release
+ 	 * Initial release (work in progress)
 
 ## Usage
 
