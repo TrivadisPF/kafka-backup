@@ -1,0 +1,14 @@
+logging:
+  level:
+    root: WARN
+
+spring:
+  main:
+    banner-mode: "off"
+
+s3:
+  region: "eu-central-1"
+  bucket: "gandalf-int"
+
+kafka:
+  bootstrap-servers: localhost:9092
