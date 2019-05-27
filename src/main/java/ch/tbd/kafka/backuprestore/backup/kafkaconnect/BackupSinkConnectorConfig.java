@@ -1,8 +1,10 @@
 package ch.tbd.kafka.backuprestore.backup.kafkaconnect;
 
+import ch.tbd.kafka.backuprestore.backup.storage.CompressionType;
 import ch.tbd.kafka.backuprestore.config.ComposableConfig;
 import com.amazonaws.regions.RegionUtils;
 import com.amazonaws.regions.Regions;
+import com.amazonaws.services.s3.model.CannedAccessControlList;
 import com.amazonaws.services.s3.model.SSEAlgorithm;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
@@ -29,6 +31,18 @@ public class BackupSinkConnectorConfig extends AbstractConfig implements Composa
     // S3 Group
     public static final String S3_BUCKET_CONFIG = "s3.bucket.name";
 
+    public static final String SSEA_CONFIG = "s3.ssea.name";
+    public static final String SSEA_DEFAULT = "";
+
+    public static final String SSE_CUSTOMER_KEY = "s3.sse.customer.key";
+    public static final Password SSE_CUSTOMER_KEY_DEFAULT = new Password(null);
+
+    public static final String SSE_KMS_KEY_ID_CONFIG = "s3.sse.kms.key.id";
+    public static final String SSE_KMS_KEY_ID_DEFAULT = "";
+
+    public static final String PART_SIZE_CONFIG = "s3.part.size";
+    public static final int PART_SIZE_DEFAULT = 25 * 1024 * 1024;
+
     public static final String S3_PROXY_URL_CONFIG = "s3.proxy.url";
     public static final String S3_PROXY_URL_DEFAULT = "";
 
@@ -43,6 +57,12 @@ public class BackupSinkConnectorConfig extends AbstractConfig implements Composa
 
     public static final String REGION_CONFIG = "s3.region";
     public static final String REGION_DEFAULT = Regions.DEFAULT_REGION.getName();
+
+    public static final String ACL_CANNED_CONFIG = "s3.acl.canned";
+    public static final String ACL_CANNED_DEFAULT = null;
+
+    public static final String COMPRESSION_TYPE_CONFIG = "s3.compression.type";
+    public static final String COMPRESSION_TYPE_DEFAULT = "none";
 
     public static final String S3_RETRY_BACKOFF_CONFIG = "s3.retry.backoff.ms";
     public static final int S3_RETRY_BACKOFF_DEFAULT = 200;
@@ -132,12 +152,93 @@ public class BackupSinkConnectorConfig extends AbstractConfig implements Composa
                         "S3 Bucket"
                 );
 
-
         List<String> validSsea = new ArrayList<>(SSEAlgorithm.values().length + 1);
         validSsea.add("");
         for (SSEAlgorithm algo : SSEAlgorithm.values()) {
             validSsea.add(algo.toString());
         }
+        configDef.define(
+                SSEA_CONFIG,
+                Type.STRING,
+                SSEA_DEFAULT,
+                ConfigDef.ValidString.in(validSsea.toArray(new String[validSsea.size()])),
+                Importance.LOW,
+                "The S3 Server Side Encryption Algorithm.",
+                group,
+                ++orderInGroup,
+                Width.LONG,
+                "S3 Server Side Encryption Algorithm",
+                new SseAlgorithmRecommender()
+        );
+
+        configDef.define(
+                SSE_CUSTOMER_KEY,
+                Type.PASSWORD,
+                SSE_CUSTOMER_KEY_DEFAULT,
+                Importance.LOW,
+                "The S3 Server Side Encryption Customer-Provided Key (SSE-C).",
+                group,
+                ++orderInGroup,
+                Width.LONG,
+                "S3 Server Side Encryption Customer-Provided Key (SSE-C)"
+        );
+
+        configDef.define(
+                SSE_KMS_KEY_ID_CONFIG,
+                Type.STRING,
+                SSE_KMS_KEY_ID_DEFAULT,
+                Importance.LOW,
+                "The name of the AWS Key Management Service (AWS-KMS) key to be used for server side "
+                        + "encryption of the S3 objects. No encryption is used when no key is provided, but"
+                        + " it is enabled when '" + SSEAlgorithm.KMS + "' is specified as encryption "
+                        + "algorithm with a valid key name.",
+                group,
+                ++orderInGroup,
+                Width.LONG,
+                "S3 Server Side Encryption Key",
+                new SseKmsKeyIdRecommender()
+        );
+
+        configDef.define(
+                ACL_CANNED_CONFIG,
+                Type.STRING,
+                ACL_CANNED_DEFAULT,
+                new CannedAclValidator(),
+                Importance.LOW,
+                "An S3 canned ACL header value to apply when writing objects.",
+                group,
+                ++orderInGroup,
+                Width.LONG,
+                "S3 Canned ACL"
+        );
+
+        configDef.define(
+                PART_SIZE_CONFIG,
+                Type.INT,
+                PART_SIZE_DEFAULT,
+                new PartRange(),
+                Importance.HIGH,
+                "The Part Size in S3 Multi-part Uploads.",
+                group,
+                ++orderInGroup,
+                Width.LONG,
+                "S3 Part Size"
+        );
+
+        configDef.define(
+                COMPRESSION_TYPE_CONFIG,
+                Type.STRING,
+                COMPRESSION_TYPE_DEFAULT,
+                new CompressionTypeValidator(),
+                Importance.LOW,
+                "Compression type for file written to S3. "
+                        + "Applied when using JsonFormat or ByteArrayFormat. "
+                        + "Available values: none, gzip.",
+                group,
+                ++orderInGroup,
+                Width.LONG,
+                "Compression type"
+        );
 
         configDef.define(
                 S3_PROXY_URL_CONFIG,
@@ -321,6 +422,29 @@ public class BackupSinkConnectorConfig extends AbstractConfig implements Composa
         return getString(REGION_CONFIG);
     }
 
+    public String getSsea() {
+        return getString(SSEA_CONFIG);
+    }
+
+    public String getSseCustomerKey() {
+        return getPassword(SSE_CUSTOMER_KEY).value();
+    }
+
+    public String getSseKmsKeyId() {
+        return getString(SSE_KMS_KEY_ID_CONFIG);
+    }
+
+    public int getPartSize() {
+        return getInt(PART_SIZE_CONFIG);
+    }
+
+    public CannedAccessControlList getCannedAcl() {
+        return CannedAclValidator.ACLS_BY_HEADER_VALUE.get(getString(ACL_CANNED_CONFIG));
+    }
+
+    public CompressionType getCompressionType() {
+        return CompressionType.forName(getString(COMPRESSION_TYPE_CONFIG));
+    }
 
     private static class RegionRecommender implements ConfigDef.Recommender {
         @Override
@@ -376,6 +500,68 @@ public class BackupSinkConnectorConfig extends AbstractConfig implements Composa
         }
     }
 
+    private static class SseAlgorithmRecommender implements ConfigDef.Recommender {
+        @Override
+        public List<Object> validValues(String name, Map<String, Object> connectorConfigs) {
+            List<SSEAlgorithm> list = Arrays.asList(SSEAlgorithm.values());
+            return new ArrayList<Object>(list);
+        }
+
+        @Override
+        public boolean visible(String name, Map<String, Object> connectorConfigs) {
+            return true;
+        }
+    }
+
+    public static class SseKmsKeyIdRecommender implements ConfigDef.Recommender {
+        public SseKmsKeyIdRecommender() {
+        }
+
+        @Override
+        public List<Object> validValues(String name, Map<String, Object> connectorConfigs) {
+            return new LinkedList<>();
+        }
+
+        @Override
+        public boolean visible(String name, Map<String, Object> connectorConfigs) {
+            return SSEAlgorithm.KMS.toString()
+                    .equalsIgnoreCase((String) connectorConfigs.get(SSEA_CONFIG));
+        }
+    }
+
+    private static class PartRange implements ConfigDef.Validator {
+        // S3 specific limit
+        final int min = 5 * 1024 * 1024;
+        // Connector specific
+        final int max = Integer.MAX_VALUE;
+
+        @Override
+        public void ensureValid(String name, Object value) {
+            if (value == null) {
+                throw new ConfigException(name, value, "Part size must be non-null");
+            }
+            Number number = (Number) value;
+            if (number.longValue() < min) {
+                throw new ConfigException(
+                        name,
+                        value,
+                        "Part size must be at least: " + min + " bytes (5MB)"
+                );
+            }
+            if (number.longValue() > max) {
+                throw new ConfigException(
+                        name,
+                        value,
+                        "Part size must be no more: " + Integer.MAX_VALUE + " bytes (~2GB)"
+                );
+            }
+        }
+
+        public String toString() {
+            return "[" + min + ",...," + max + "]";
+        }
+    }
+
     public static class BooleanParentRecommender implements ConfigDef.Recommender {
 
         protected final String parentConfigName;
@@ -392,6 +578,63 @@ public class BackupSinkConnectorConfig extends AbstractConfig implements Composa
         @Override
         public boolean visible(String name, Map<String, Object> connectorConfigs) {
             return (boolean) connectorConfigs.get(parentConfigName);
+        }
+    }
+
+    private static class CannedAclValidator implements ConfigDef.Validator {
+        public static final Map<String, CannedAccessControlList> ACLS_BY_HEADER_VALUE = new HashMap<>();
+        public static final String ALLOWED_VALUES;
+
+        static {
+            List<String> aclHeaderValues = new ArrayList<>();
+            for (CannedAccessControlList acl : CannedAccessControlList.values()) {
+                ACLS_BY_HEADER_VALUE.put(acl.toString(), acl);
+                aclHeaderValues.add(acl.toString());
+            }
+            ALLOWED_VALUES = Utils.join(aclHeaderValues, ", ");
+        }
+
+        @Override
+        public void ensureValid(String name, Object cannedAcl) {
+            if (cannedAcl == null) {
+                return;
+            }
+            String aclStr = ((String) cannedAcl).trim();
+            if (!ACLS_BY_HEADER_VALUE.containsKey(aclStr)) {
+                throw new ConfigException(name, cannedAcl, "Value must be one of: " + ALLOWED_VALUES);
+            }
+        }
+
+        @Override
+        public String toString() {
+            return "[" + ALLOWED_VALUES + "]";
+        }
+    }
+
+    private static class CompressionTypeValidator implements ConfigDef.Validator {
+        public static final Map<String, CompressionType> TYPES_BY_NAME = new HashMap<>();
+        public static final String ALLOWED_VALUES;
+
+        static {
+            List<String> names = new ArrayList<>();
+            for (CompressionType compressionType : CompressionType.values()) {
+                TYPES_BY_NAME.put(compressionType.name, compressionType);
+                names.add(compressionType.name);
+            }
+            ALLOWED_VALUES = Utils.join(names, ", ");
+        }
+
+        @Override
+        public void ensureValid(String name, Object compressionType) {
+            String compressionTypeString = ((String) compressionType).trim();
+            if (!TYPES_BY_NAME.containsKey(compressionTypeString)) {
+                throw new ConfigException(name, compressionType, "Value must be one of: " + ALLOWED_VALUES);
+            }
+        }
+
+        @Override
+        public String toString() {
+            return "[" + ALLOWED_VALUES + "]";
         }
     }
 

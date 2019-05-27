@@ -2,6 +2,7 @@ package ch.tbd.kafka.backuprestore.backup.storage.partitioner;
 
 import ch.tbd.kafka.backuprestore.backup.kafkaconnect.BackupSinkConnectorConfig;
 import ch.tbd.kafka.backuprestore.backup.storage.format.KafkaRecordWriter;
+import ch.tbd.kafka.backuprestore.backup.storage.format.KafkaRecordWriterMultipartUpload;
 import ch.tbd.kafka.backuprestore.backup.storage.format.RecordWriter;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Time;
@@ -302,7 +303,8 @@ public class TopicPartitionWriter {
         //String commitFilename = getCommitFilename(encodedPartition);
 
         // TODO: Optimize how to extract an instance of RecordWriter
-        RecordWriter writer = new KafkaRecordWriter(connectorConfig);
+        //RecordWriter writer = new KafkaRecordWriter(connectorConfig);
+        RecordWriter writer = new KafkaRecordWriterMultipartUpload(connectorConfig);
         writers.put(encodedPartition, writer);
         return writer;
     }

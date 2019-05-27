@@ -102,6 +102,7 @@ public class KafkaRecordWriter implements RecordWriter {
                     .setHeaders(adaptHeaders(record.getHeaders()))
                     .build();
             records1[pos] = avroKafkaRecord;
+            /*
             try {
                 byte[] byteArrayRecord = avroKafkaRecord.toByteBuffer().array();
                 if (byteArrayFinal == null) {
@@ -115,7 +116,7 @@ public class KafkaRecordWriter implements RecordWriter {
                 }
             } catch (Exception e) {
                 throw new RuntimeException(e);
-            }
+            }*/
             pos++;
         }
         try {
@@ -130,7 +131,8 @@ public class KafkaRecordWriter implements RecordWriter {
         }catch (Exception e) {
             e.printStackTrace();
         }
-        return byteArrayFinal != null ? new ByteArrayInputStream(byteArrayFinal) : null;
+        //return byteArrayFinal != null ? new ByteArrayInputStream(byteArrayFinal) : null;
+        return null;
     }
 
     private Map<CharSequence, ByteBuffer> adaptHeaders(Map<String, ByteBuffer> headers) {

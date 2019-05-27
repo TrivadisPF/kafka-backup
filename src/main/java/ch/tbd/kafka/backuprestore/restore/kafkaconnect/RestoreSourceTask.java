@@ -39,6 +39,9 @@ public class RestoreSourceTask extends SourceTask {
 
     @Override
     public void start(Map<String, String> map) {
+        System.out.println((String) map.get("PROVA_KEY"));
+
+        /*
         connectorConfig = new RestoreSourceConnectorConfig(map);
         AmazonS3ClientBuilder builder = AmazonS3ClientBuilder.standard();
         builder.withRegion(connectorConfig.getRegionConfig());
@@ -52,8 +55,7 @@ public class RestoreSourceTask extends SourceTask {
         }
 
         this.amazonS3 = builder.build();
-
-
+        */
     }
 
     private synchronized void createLockFile() {
@@ -142,11 +144,6 @@ public class RestoreSourceTask extends SourceTask {
                 if (object != null) {
                     for (AvroKafkaRecord avroKafkaRecord : object) {
                         // TODO: Fix the schema. Could be possible to store a Json?
-
-                /*
-                SourceRecord sourceRecord = new SourceRecord(partitionAssigned, avroKafkaRecord.getOffset(), connectorConfig.getRestoreTopicName(), avroKafkaRecord.get avroKafkaRecord.getSchema(), value);
-
-                 */
                     }
                 }
             } catch (IOException e) {
@@ -160,6 +157,8 @@ public class RestoreSourceTask extends SourceTask {
     public List<SourceRecord> poll() throws InterruptedException {
         logger.info("poll");
         List<SourceRecord> recordsToStore = new ArrayList<>();
+        /*
+
         try {
             //create lock file
             createLockFile();
@@ -180,7 +179,7 @@ public class RestoreSourceTask extends SourceTask {
             deleteLockFile();
         }
 
-
+*/
         return recordsToStore;
     }
 
@@ -189,6 +188,10 @@ public class RestoreSourceTask extends SourceTask {
 
     }
 
+    @Override
+    public void commitRecord(SourceRecord record) throws InterruptedException {
+        super.commitRecord(record);
+    }
 
     public static <T> T toObject(Class<T> clazz, byte[] bytes) {
         ByteArrayInputStream bis = null;
