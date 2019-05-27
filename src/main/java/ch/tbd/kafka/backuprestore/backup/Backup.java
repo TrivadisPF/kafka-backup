@@ -45,7 +45,7 @@ public class Backup {
         config.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
 
         KafkaRecordSerializer kafkaRecordSerializer = new KafkaRecordAvroSerializer();
-        KafkaRecordWriter kafkaRecordWriter = new S3KafkaRecordWriter(region, bucket, kafkaRecordSerializer);
+        KafkaRecordWriter kafkaRecordWriter = new S3KafkaRecordWriter(region, bucket, null, 0, kafkaRecordSerializer);
 
         try (final Consumer<ByteBuffer, ByteBuffer> consumer = new KafkaConsumer<>(config)) {
             consumer.subscribe(Collections.singletonList(topic));
