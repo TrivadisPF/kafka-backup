@@ -13,6 +13,6 @@ Key Features:
 
 ## Documentation
 
-The documentation is available [here](doc/README.md)
+The documentation is available [here](doc/README.md).
 
 
