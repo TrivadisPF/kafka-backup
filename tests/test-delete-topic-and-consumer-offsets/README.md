@@ -97,7 +97,7 @@ Delete the topic
 kafka-topics --zookeeper zookeeper-1:2181 --delete --topic test-topic
 ```
 
-A message with a `NULL` value will be written to the `__consumer_offsets` topic
+A message with a `NULL` value will be written to the `__consumer_offsets` topic (one `NULL` message for each consumer and topic partition)
 
 ```
 root@broker-1:/# kafka-console-consumer --formatter "kafka.coordinator.group.GroupMetadataManager\$OffsetsMessageFormatter" --topic __consumer_offsets --bootstrap-server localhost:9092
