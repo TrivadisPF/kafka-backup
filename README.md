@@ -1,4 +1,4 @@
-# Kafka Connect for Kafka Backups
+# Kafka Backup
 
 Key Features:
 
@@ -8,7 +8,11 @@ Key Features:
 
 ## Changelog
 
- * 0.1.0
- 	 * Initial release (work in progress)
+ * 0.x.x
 
-WIP
+
+## Documentation
+
+The documentation is available [here](doc/README.md)
+
+
