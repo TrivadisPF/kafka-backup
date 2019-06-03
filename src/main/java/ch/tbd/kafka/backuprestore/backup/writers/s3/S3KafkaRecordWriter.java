@@ -3,6 +3,8 @@ package ch.tbd.kafka.backuprestore.backup.writers.s3;
 import ch.tbd.kafka.backuprestore.backup.serializers.KafkaRecordSerializer;
 import ch.tbd.kafka.backuprestore.backup.writers.AbstractKafkaRecordWriter;
 import ch.tbd.kafka.backuprestore.model.KafkaRecord;
+import com.amazonaws.ClientConfiguration;
+import com.amazonaws.Protocol;
 import com.amazonaws.auth.profile.ProfileCredentialsProvider;
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.AmazonS3ClientBuilder;
@@ -22,12 +24,19 @@ public class S3KafkaRecordWriter extends AbstractKafkaRecordWriter {
     private AmazonS3 amazonS3;
     private String bucket;
 
-    public S3KafkaRecordWriter(String region, String bucket, KafkaRecordSerializer kafkaRecordSerializer) {
+    public S3KafkaRecordWriter(String region, String bucket, String proxyHost, int proxyPort, KafkaRecordSerializer kafkaRecordSerializer) {
         super(kafkaRecordSerializer);
-        this.amazonS3 = AmazonS3ClientBuilder.standard()
-                .withRegion(region)
-                .withCredentials(new ProfileCredentialsProvider())
-                .build();
+        AmazonS3ClientBuilder builder = AmazonS3ClientBuilder.standard();
+        builder.withRegion(region);
+        builder.withCredentials(new ProfileCredentialsProvider());
+        if (proxyHost != null && !proxyHost.isEmpty() && proxyPort > 0) {
+            ClientConfiguration config = new ClientConfiguration();
+            config.setProtocol(Protocol.HTTPS);
+            config.setProxyHost(proxyHost);
+            config.setProxyPort(proxyPort);
+            builder.withClientConfiguration(config);
+        }
+        this.amazonS3 = builder.build();
         this.bucket = bucket;
     }
 
