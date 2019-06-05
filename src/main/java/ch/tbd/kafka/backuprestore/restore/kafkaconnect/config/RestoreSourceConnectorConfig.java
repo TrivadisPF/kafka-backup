@@ -11,6 +11,8 @@ import org.apache.kafka.common.config.ConfigDef.Width;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.utils.Utils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Arrays;
 import java.util.List;
@@ -24,9 +26,12 @@ import java.util.Map;
  * @version $$Revision$$
  */
 public class RestoreSourceConnectorConfig extends AbstractConfig implements ComposableConfig {
+    private static Logger logger = LoggerFactory.getLogger(RestoreSourceConnectorConfig.class);
 
     public static final String S3_BUCKET_CONFIG = "s3.bucket.name";
-    public static final String RESTORE_TOPIC_NAME = "restore.topic";
+    public static final String TOPIC_S3_NAME = "topic.s3.name";
+    public static final String TOPIC_KAFKA_NAME = "topic.kafka.name";
+    public static final String TOPIC_KAFKA_NAME_DEFAULT = null;
 
     public static final String S3_PROXY_URL_CONFIG = "s3.proxy.url";
     public static final String S3_PROXY_URL_DEFAULT = "";
@@ -43,16 +48,17 @@ public class RestoreSourceConnectorConfig extends AbstractConfig implements Comp
     public static final String REGION_CONFIG = "s3.region";
     public static final String REGION_DEFAULT = Regions.DEFAULT_REGION.getName();
 
-
     private String name;
 
 
     public RestoreSourceConnectorConfig(Map<String, String> props) {
         this(conf(), props);
+        logger.info("RestoreSourceConnectorConfig(Map<String, String> props)");
     }
 
     protected RestoreSourceConnectorConfig(ConfigDef conf, Map<String, String> props) {
         super(conf, props);
+        logger.info("RestoreSourceConnectorConfig(ConfigDef conf, Map<String, String> props)");
         this.name = parseName(originalsStrings());
     }
 
@@ -66,6 +72,7 @@ public class RestoreSourceConnectorConfig extends AbstractConfig implements Comp
     }
 
     public static ConfigDef conf() {
+        logger.info("conf()");
 
         final String group = "restore-s3";
         int orderInGroup = 0;
@@ -83,14 +90,26 @@ public class RestoreSourceConnectorConfig extends AbstractConfig implements Comp
                 );
 
         configDef.define(
-                RESTORE_TOPIC_NAME,
+                TOPIC_S3_NAME,
                 ConfigDef.Type.STRING,
                 Importance.HIGH,
-                "The topic name to restore.",
+                "The topic name to search in S3 bucket to restore.",
                 group,
                 ++orderInGroup,
                 Width.LONG,
-                "The topic name to restore"
+                "The topic name to search in S3 bucket to restore."
+        );
+
+        configDef.define(
+                TOPIC_KAFKA_NAME,
+                ConfigDef.Type.STRING,
+                TOPIC_KAFKA_NAME_DEFAULT,
+                Importance.HIGH,
+                "The topic name to use to save in kafka the backup.",
+                group,
+                ++orderInGroup,
+                Width.LONG,
+                "The topic name to use to save in kafka the backup."
         );
 
         configDef.define(
@@ -179,8 +198,16 @@ public class RestoreSourceConnectorConfig extends AbstractConfig implements Comp
         return getString(S3_BUCKET_CONFIG);
     }
 
-    public String getRestoreTopicName() {
-        return getString(RESTORE_TOPIC_NAME);
+    public String getTopicS3Name() {
+        return getString(TOPIC_S3_NAME);
+    }
+
+    public String getTopicKafkaName() {
+        String topicKafkaName = getString(TOPIC_KAFKA_NAME);
+        if (topicKafkaName != null && !topicKafkaName.isEmpty()) {
+            return topicKafkaName;
+        }
+        return getTopicS3Name();
     }
 
     public String getProxyUrlConfig() {

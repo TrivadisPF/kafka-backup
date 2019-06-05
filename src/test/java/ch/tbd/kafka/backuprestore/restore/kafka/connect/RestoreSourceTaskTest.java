@@ -1,6 +1,7 @@
 package ch.tbd.kafka.backuprestore.restore.kafka.connect;
 
 import ch.tbd.kafka.backuprestore.restore.kafkaconnect.RestoreSourceTask;
+import ch.tbd.kafka.backuprestore.util.Constants;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -29,6 +30,7 @@ public class RestoreSourceTaskTest {
         configurationMap.put("s3.bucket.name", "antonio-aws-test");
         configurationMap.put("s3.region", "eu-central-1");
         configurationMap.put("restore.topic", "test-topic");
+        configurationMap.put(Constants.PARTITION_ASSIGNED_KEY, "0");
         restoreSourceTask = new RestoreSourceTask();
         restoreSourceTask.start(configurationMap);
     }
