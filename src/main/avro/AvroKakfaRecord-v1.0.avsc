@@ -1,14 +1,14 @@
 {
-  "namespace": "ch.tbd.kafka.backuprestore.model.avro",
-  "type": "record",
-  "name": "AvroKafkaRecord",
-  "fields" : [
-    {"name": "topic", "type": "string"},
-    {"name": "partition", "type": "int"},
-    {"name": "offset", "type": "long"},
-    {"name": "timestamp", "type": "long"},
-    {"name": "key", "type": [ "bytes", "null" ], "default": "null" },
-    {"name": "value", "type": "bytes"},
-    {"name": "headers", "type": [ {"type": "map", "values": "bytes"}, "null" ], "default": null}
-  ]
+    "namespace": "ch.tbd.kafka.backuprestore.model.avro",
+    "type": "record",
+    "name": "AvroKafkaRecord",
+    "fields" : [
+        {"name": "topic", "type": "string"},
+        {"name": "partition", "type": "int"},
+        {"name": "offset", "type": "long"},
+        {"name": "timestamp", "type": "long"},
+        {"name": "key", "type": [ "bytes", "null" ], "default": "null" },
+        {"name": "value", "type": "bytes"},
+        {"name": "headers", "type": [ {"type": "map", "values": "bytes"}, "null" ], "default": null}
+    ]
 }

@@ -10,6 +10,7 @@ public class KafkaRecord {
     private int partition;
     private long offset;
     private long timestamp;
+    private ByteBuffer keySchema;
     private ByteBuffer key;
     private ByteBuffer value;
     private Map<String, ByteBuffer> headers;
@@ -19,6 +20,16 @@ public class KafkaRecord {
         this.partition = partition;
         this.offset = offset;
         this.timestamp = timestamp;
+        this.key = key;
+        this.value = value;
+    }
+
+    public KafkaRecord(String topic, int partition, long offset, long timestamp, ByteBuffer keySchema, ByteBuffer key, ByteBuffer value) {
+        this.topic = topic;
+        this.partition = partition;
+        this.offset = offset;
+        this.timestamp = timestamp;
+        this.keySchema = keySchema;
         this.key = key;
         this.value = value;
     }
@@ -47,6 +58,10 @@ public class KafkaRecord {
 
     public long getTimestamp() {
         return timestamp;
+    }
+
+    public ByteBuffer getKeySchema() {
+        return keySchema;
     }
 
     public ByteBuffer getKey() {

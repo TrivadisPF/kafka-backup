@@ -1,14 +1,14 @@
 package ch.tbd.kafka.backuprestore.backup.storage.format;
 
 import ch.tbd.kafka.backuprestore.backup.kafkaconnect.BackupSinkConnectorConfig;
+import ch.tbd.kafka.backuprestore.backup.serializers.KafkaRecordSerializer;
+import ch.tbd.kafka.backuprestore.backup.serializers.avro.KafkaRecordAvroSerializer;
 import ch.tbd.kafka.backuprestore.backup.storage.S3OutputStream;
 import ch.tbd.kafka.backuprestore.model.KafkaRecord;
 import ch.tbd.kafka.backuprestore.model.avro.AvroKafkaRecord;
-import com.amazonaws.ClientConfiguration;
-import com.amazonaws.Protocol;
-import com.amazonaws.auth.profile.ProfileCredentialsProvider;
+import ch.tbd.kafka.backuprestore.util.AmazonS3Utils;
+import ch.tbd.kafka.backuprestore.util.Constants;
 import com.amazonaws.services.s3.AmazonS3;
-import com.amazonaws.services.s3.AmazonS3ClientBuilder;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.springframework.util.SerializationUtils;
@@ -17,8 +17,9 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.ObjectOutputStream;
 import java.io.OutputStream;
+import java.nio.Buffer;
 import java.nio.ByteBuffer;
-import java.nio.charset.StandardCharsets;
+import java.util.Base64;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -36,13 +37,12 @@ public class KafkaRecordWriterMultipartUpload implements RecordWriter {
     private String bucket;
     private S3OutputStream s3out;
     private OutputStream s3outWrapper;
-    private static final String LINE_SEPARATOR = System.lineSeparator();
-    private static final byte[] LINE_SEPARATOR_BYTES
-            = LINE_SEPARATOR.getBytes(StandardCharsets.UTF_8);
+    private KafkaRecordSerializer kafkaRecordSerializer = new KafkaRecordAvroSerializer();
 
 
     public KafkaRecordWriterMultipartUpload(BackupSinkConnectorConfig connectorConfig) {
         this.conf = connectorConfig;
+        /*
         AmazonS3ClientBuilder builder = AmazonS3ClientBuilder.standard();
         builder.withRegion(connectorConfig.getRegionConfig());
         builder.withCredentials(new ProfileCredentialsProvider());
@@ -52,21 +52,25 @@ public class KafkaRecordWriterMultipartUpload implements RecordWriter {
             config.setProxyHost(connectorConfig.getProxyUrlConfig());
             config.setProxyPort(connectorConfig.getProxyPortConfig());
             builder.withClientConfiguration(config);
-        }
-        this.amazonS3 = builder.build();
+        }*/
+        this.amazonS3 = AmazonS3Utils.initConnection(connectorConfig.getRegionConfig(),
+                connectorConfig.getProxyUrlConfig(), connectorConfig.getProxyPortConfig());
         this.bucket = connectorConfig.getBucketName();
     }
 
 
     @Override
     public void write(SinkRecord sinkRecord) {
-        KafkaRecord record = new KafkaRecord(sinkRecord.topic(), sinkRecord.kafkaPartition(), sinkRecord.kafkaOffset(), sinkRecord.timestamp(), getBuffer(sinkRecord.key()), getBuffer(sinkRecord.value()));
+        KafkaRecord record = new KafkaRecord(sinkRecord.topic(), sinkRecord.kafkaPartition(), sinkRecord.kafkaOffset(), sinkRecord.timestamp(),
+                //        getBuffer(sinkRecord.key()), getBuffer(sinkRecord.value()));
+                ByteBuffer.wrap((byte[]) sinkRecord.key()), ByteBuffer.wrap((byte[]) sinkRecord.value()));
+
         if (s3outWrapper == null) {
             s3out = new S3OutputStream(key(record), conf, amazonS3);
             this.s3outWrapper = s3out.wrapForCompression();
         }
         try {
-
+/*
             AvroKafkaRecord avroKafkaRecord = AvroKafkaRecord.newBuilder()
                     .setTopic(record.getTopic())
                     .setPartition(record.getPartition())
@@ -76,14 +80,16 @@ public class KafkaRecordWriterMultipartUpload implements RecordWriter {
                     .setValue(record.getValue())
                     .setHeaders(adaptHeaders(record.getHeaders()))
                     .build();
-
+*/
             if (sinkRecord.headers() != null) {
                 sinkRecord.headers().forEach(header ->
                         record.addHeader(header.key(), SerializationUtils.serialize(header.value()))
                 );
             }
-            s3outWrapper.write(serialize(avroKafkaRecord));
-            s3outWrapper.write(LINE_SEPARATOR_BYTES);
+            //s3outWrapper.write(kafkaRecordSerializer.serialize(record).array());
+            s3outWrapper.write(Base64.getEncoder().encode(kafkaRecordSerializer.serialize(record).array()));
+            //s3outWrapper.write(serialize(avroKafkaRecord));
+            s3outWrapper.write(Constants.LINE_SEPARATOR_BYTES);
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -115,7 +121,7 @@ public class KafkaRecordWriterMultipartUpload implements RecordWriter {
             ostream.writeObject(obj);
             ByteBuffer buffer = ByteBuffer.allocate(bstream.size());
             buffer.put(bstream.toByteArray());
-            buffer.flip();
+            ((Buffer) buffer).flip();
             return buffer;
         } catch (IOException e) {
             e.printStackTrace();

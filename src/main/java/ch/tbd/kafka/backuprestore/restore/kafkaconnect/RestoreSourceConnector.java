@@ -2,6 +2,7 @@ package ch.tbd.kafka.backuprestore.restore.kafkaconnect;
 
 import ch.tbd.kafka.backuprestore.restore.kafkaconnect.config.RestoreSourceConnectorConfig;
 import ch.tbd.kafka.backuprestore.util.AmazonS3Utils;
+import ch.tbd.kafka.backuprestore.util.Constants;
 import ch.tbd.kafka.backuprestore.util.Version;
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.model.ListObjectsV2Request;
@@ -11,11 +12,14 @@ import org.apache.kafka.common.config.Config;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.source.SourceConnector;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.*;
 
 public class RestoreSourceConnector extends SourceConnector {
 
+    private Logger logger = LoggerFactory.getLogger(RestoreSourceConnector.class);
     private RestoreSourceConnectorConfig connectorConfig;
     private AmazonS3 amazonS3;
 
@@ -33,9 +37,8 @@ public class RestoreSourceConnector extends SourceConnector {
 
     @Override
     public List<Map<String, String>> taskConfigs(int maxTasks) {
-
         ListObjectsV2Request req = new ListObjectsV2Request().
-                withBucketName(connectorConfig.getBucketName()).withPrefix(connectorConfig.getRestoreTopicName() + AmazonS3Utils.SEPARATOR);
+                withBucketName(connectorConfig.getBucketName()).withPrefix(connectorConfig.getTopicS3Name() + AmazonS3Utils.SEPARATOR);
         ListObjectsV2Result result = amazonS3.listObjectsV2(req);
 
         List<S3ObjectSummary> s3ObjectSummaries = result.getObjectSummaries();
@@ -47,14 +50,19 @@ public class RestoreSourceConnector extends SourceConnector {
             partitionsSet.add(partition);
         });
 
-
         Integer[] partitions = partitionsSet.toArray(new Integer[partitionsSet.size()]);
 
         int index = 0;
 
-        Map<String, String> taskProps = new HashMap<>(connectorConfig.originalsStrings());
+        if (maxTasks > partitionsSet.size()) {
+            maxTasks = partitionsSet.size();
+            logger.warn("Number of task greather than the partitions present inside the backup. " +
+                    "The number of task will be the same of the number of partitions found inside the backup {}", partitionsSet.size());
+        }
+
         List<Map<String, String>> taskConfigs = new ArrayList<>(maxTasks);
         for (int i = 0; i < maxTasks; ++i) {
+            Map<String, String> taskProps = new HashMap<>(connectorConfig.originalsStrings());
             int numPartitionStored = partitionsSet.size();
             int mod = numPartitionStored % maxTasks;
 
@@ -65,7 +73,7 @@ public class RestoreSourceConnector extends SourceConnector {
             if (mod == 0) {
                 for (int j = index; j < lastIndex; j++) {
                     partitionsTask += partitions[j];
-                    if ((j + 1) < index) {
+                    if ((j + 1) < lastIndex) {
                         partitionsTask += ";";
                     }
                 }
@@ -83,7 +91,7 @@ public class RestoreSourceConnector extends SourceConnector {
                 index = lastIndex;
             }
 
-            taskProps.put("PARTITION_ASSIGNED", partitionsTask);
+            taskProps.put(Constants.PARTITION_ASSIGNED_KEY, partitionsTask);
             taskConfigs.add(taskProps);
         }
         return taskConfigs;

@@ -1,36 +1,46 @@
 package ch.tbd.kafka.backuprestore.restore.kafkaconnect;
 
-import ch.tbd.kafka.backuprestore.model.avro.AvroKafkaRecord;
+import ch.tbd.kafka.backuprestore.model.KafkaRecord;
+import ch.tbd.kafka.backuprestore.restore.deserializers.KafkaRecordDeserializer;
+import ch.tbd.kafka.backuprestore.restore.deserializers.avro.KafkaRecordAvroDeserializer;
 import ch.tbd.kafka.backuprestore.restore.kafkaconnect.config.RestoreSourceConnectorConfig;
+import ch.tbd.kafka.backuprestore.util.AmazonS3Utils;
+import ch.tbd.kafka.backuprestore.util.Constants;
 import ch.tbd.kafka.backuprestore.util.Version;
-import com.amazonaws.ClientConfiguration;
-import com.amazonaws.Protocol;
-import com.amazonaws.auth.profile.ProfileCredentialsProvider;
 import com.amazonaws.services.s3.AmazonS3;
-import com.amazonaws.services.s3.AmazonS3ClientBuilder;
 import com.amazonaws.services.s3.model.*;
-import org.apache.commons.compress.utils.IOUtils;
+import org.apache.kafka.connect.data.Schema;
+import org.apache.kafka.connect.header.ConnectHeaders;
+import org.apache.kafka.connect.header.Header;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTask;
+import org.apache.kafka.connect.source.SourceTaskContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.util.SerializationUtils;
 
-import java.io.ByteArrayInputStream;
+import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.ObjectInputStream;
+import java.io.InputStreamReader;
+import java.nio.ByteBuffer;
 import java.util.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public class RestoreSourceTask extends SourceTask {
 
     private final Logger logger = LoggerFactory.getLogger(RestoreSourceTask.class);
     private final static String SEPARATOR = "/";
-    private final String LOCK_FILE_NAME = "lock.json";
-    private final String INDEX_RESTORED_FILE_NAME = "index-restoring-file.avro-messages";
+    private KafkaRecordDeserializer kafkaRecordDeserializer = new KafkaRecordAvroDeserializer();
+
+    private static final String TOPIC_PARTITION_FIELD = "TOPIC_PARTITION_NAME";
+    private static final String TOPIC_POSITION_FIELD = "TOPIC_POSITION_FIELD";
 
     private RestoreSourceConnectorConfig connectorConfig;
     private AmazonS3 amazonS3;
-    private int partitionAssigned = -1;
+    private int[] partitionAssigned = null;
+    private Map<Integer, Long> lastOffsetCommittedOnKafka = new HashMap<>();
+    private Map<Integer, Long> lastOffsetS3Read = new HashMap<>();
+    private final AtomicBoolean running = new AtomicBoolean(false);
+    private String topicNameS3 = null;
 
     @Override
     public String version() {
@@ -39,187 +49,149 @@ public class RestoreSourceTask extends SourceTask {
 
     @Override
     public void start(Map<String, String> map) {
-        System.out.println((String) map.get("PROVA_KEY"));
-
-        /*
-        connectorConfig = new RestoreSourceConnectorConfig(map);
-        AmazonS3ClientBuilder builder = AmazonS3ClientBuilder.standard();
-        builder.withRegion(connectorConfig.getRegionConfig());
-        builder.setCredentials(new ProfileCredentialsProvider());
-        if (connectorConfig.getProxyUrlConfig() != null && !connectorConfig.getProxyUrlConfig().isEmpty() && connectorConfig.getProxyPortConfig() > 0) {
-            ClientConfiguration config = new ClientConfiguration();
-            config.setProtocol(Protocol.HTTPS);
-            config.setProxyHost(connectorConfig.getProxyUrlConfig());
-            config.setProxyPort(connectorConfig.getProxyPortConfig());
-            builder.withClientConfiguration(config);
+        String partitionAssigned = map.get(Constants.PARTITION_ASSIGNED_KEY);
+        if (partitionAssigned != null && partitionAssigned.indexOf(";") == -1) {
+            //I have only one partition
+            this.partitionAssigned = new int[1];
+            this.partitionAssigned[0] = Integer.parseInt(partitionAssigned);
+        } else if (partitionAssigned != null && partitionAssigned.indexOf(";") > -1) {
+            String[] split = partitionAssigned.split(";");
+            this.partitionAssigned = new int[split.length];
+            for (int i = 0; i < split.length; i++) {
+                this.partitionAssigned[i] = Integer.parseInt(split[i]);
+            }
+        } else {
+            logger.error("No partition assigned by Task. Please check the configuration {}", partitionAssigned);
         }
+        this.connectorConfig = new RestoreSourceConnectorConfig(map);
+        this.topicNameS3 = connectorConfig.getTopicS3Name();
+        this.amazonS3 = AmazonS3Utils.initConnection(connectorConfig.getRegionConfig(), connectorConfig.getProxyUrlConfig(), connectorConfig.getProxyPortConfig());
 
-        this.amazonS3 = builder.build();
-        */
-    }
-
-    private synchronized void createLockFile() {
-
-        ListObjectsV2Request req = new ListObjectsV2Request().withBucketName(connectorConfig.getBucketName()).withPrefix(connectorConfig.getRestoreTopicName() + SEPARATOR);
-        ListObjectsV2Result result = amazonS3.listObjectsV2(req);
-
-        List<S3ObjectSummary> s3ObjectSummaries = result.getObjectSummaries();
-        LinkedHashSet<Integer> partitions = new LinkedHashSet<>();
-
-        boolean lockInserted = false;
-
-        s3ObjectSummaries.stream().forEach(s3ObjectSummary -> {
-            logger.info("Key object {}", s3ObjectSummary.getKey());
-            String[] keys = s3ObjectSummary.getKey().split("/");
-            int partition = Integer.parseInt(keys[keys.length - 2]);
-            partitions.add(partition);
-        });
-
-        logger.info("Found {} partitions", partitions.size());
-
-        partitions.stream().forEach(partition -> {
-            if (partitionAssigned < 0) {
-                ListObjectsV2Request partitionReq = new ListObjectsV2Request().withBucketName(connectorConfig.getBucketName()).withPrefix(connectorConfig.getRestoreTopicName() + SEPARATOR + partition);
-                ListObjectsV2Result resultPartitionReq = amazonS3.listObjectsV2(partitionReq);
-                List<S3ObjectSummary> s3ObjectPartitionSummaries = resultPartitionReq.getObjectSummaries();
-                logger.info("Partition {} - Found {} objects ", partition, s3ObjectPartitionSummaries.size());
-
-                boolean lockFoundPartition = s3ObjectPartitionSummaries.stream().filter(s3ObjectPartitionSummary -> {
-                    String[] keys = s3ObjectPartitionSummary.getKey().split("/");
-                    String nameFile = keys[keys.length - 1];
-                    logger.info("Name object {}", nameFile);
-                    if (nameFile.equalsIgnoreCase(LOCK_FILE_NAME)) {
-                        return true;
-                    }
-                    return false;
-                }).count() > 0;
-
-                if (!lockFoundPartition) {
-                    partitionAssigned = partition;
-                    String lockFileContent = "Partition locked during the restore";
-                    //Metadata empty
-                    ObjectMetadata metadata = new ObjectMetadata();
-                    PutObjectRequest request = new PutObjectRequest(connectorConfig.getBucketName(),
-                            connectorConfig.getRestoreTopicName() + SEPARATOR + partitionAssigned + SEPARATOR + LOCK_FILE_NAME, new ByteArrayInputStream(lockFileContent.getBytes()), metadata);
-                    amazonS3.putObject(request);
-                }
+        for (int i = 0; i < this.partitionAssigned.length; i++) {
+            Map<String, Object> data = context.offsetStorageReader().offset(Collections.singletonMap(TOPIC_PARTITION_FIELD, keyPartitionOffsetKafkaConnect(this.partitionAssigned[i])));
+            if (data != null && !data.isEmpty()) {
+                lastOffsetCommittedOnKafka.put(this.partitionAssigned[i], (long) data.get(TOPIC_POSITION_FIELD));
             }
-        });
-    }
-
-    private void updateIndex(int index) {
-
-        //Metadata empty
-        ObjectMetadata metadata = new ObjectMetadata();
-        String indexFileContent = "Arrivato a " + index;
-
-        PutObjectRequest request = new PutObjectRequest(connectorConfig.getBucketName(),
-                connectorConfig.getRestoreTopicName() + SEPARATOR + partitionAssigned + SEPARATOR + INDEX_RESTORED_FILE_NAME, new ByteArrayInputStream(indexFileContent.getBytes()), metadata);
-        amazonS3.putObject(request);
-    }
-
-    private synchronized void deleteLockFile() {
-        if (partitionAssigned > -1) {
-            // do something
-
-            DeleteObjectRequest deleteObjectRequest = new DeleteObjectRequest(connectorConfig.getBucketName(), connectorConfig.getRestoreTopicName() + SEPARATOR + partitionAssigned + SEPARATOR + LOCK_FILE_NAME);
-            amazonS3.deleteObject(deleteObjectRequest);
-
         }
+        this.running.set(true);
     }
 
-    private void restore() {
-        ListObjectsV2Request objectsPartitionReq = new ListObjectsV2Request().withBucketName(connectorConfig.getBucketName()).withPrefix(connectorConfig.getRestoreTopicName() + SEPARATOR + partitionAssigned + SEPARATOR);
-        ListObjectsV2Result resultPartitionReq = amazonS3.listObjectsV2(objectsPartitionReq);
-        List<S3ObjectSummary> s3ObjectSummaries = resultPartitionReq.getObjectSummaries();
-        s3ObjectSummaries.stream().filter(s3ObjectSummary -> {
-            if (s3ObjectSummary.getKey().endsWith(LOCK_FILE_NAME)) {
-                return false;
-            }
-            return true;
-        }).forEach(s3ObjectSummary -> {
-            GetObjectRequest getObjectRequest = new GetObjectRequest(connectorConfig.getBucketName(), s3ObjectSummary.getKey());
-            try {
-                AvroKafkaRecord[] object = toObject(AvroKafkaRecord[].class, IOUtils.toByteArray(amazonS3.getObject(getObjectRequest).getObjectContent()));
-                if (object != null) {
-                    for (AvroKafkaRecord avroKafkaRecord : object) {
-                        // TODO: Fix the schema. Could be possible to store a Json?
-                    }
-                }
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-        });
+    private boolean checkValidOffsetS3(int partition, long offset) {
+        return !lastOffsetS3Read.containsKey(partition) ||
+                (lastOffsetS3Read.containsKey(partition) && lastOffsetS3Read.get(partition) < offset);
+    }
 
+    private boolean checkValidOffsetOnKafka(int partition, long offset) {
+        return !lastOffsetCommittedOnKafka.containsKey(partition) ||
+                (lastOffsetCommittedOnKafka.containsKey(partition) && lastOffsetCommittedOnKafka.get(partition) < offset);
+    }
+
+    private boolean hasMoreSpaceToAddRecords(List<SourceRecord> sourceRecordList) {
+        return sourceRecordList.size() < connectorConfig.getBatchMaxRecordsConfig();
+    }
+
+    private List<SourceRecord> restore() {
+        List<SourceRecord> sourceRecordList = new ArrayList<>();
+        for (int i = 0; i < partitionAssigned.length && hasMoreSpaceToAddRecords(sourceRecordList); i++) {
+            ListObjectsV2Request objectsPartitionReq = new ListObjectsV2Request().withBucketName(connectorConfig.getBucketName()).
+                    withPrefix(connectorConfig.getTopicS3Name() + SEPARATOR + partitionAssigned[i] + SEPARATOR);
+            ListObjectsV2Result resultPartitionReq = amazonS3.listObjectsV2(objectsPartitionReq);
+            List<S3ObjectSummary> s3ObjectSummaries = resultPartitionReq.getObjectSummaries();
+            Collections.sort(s3ObjectSummaries, Comparator.comparing(S3ObjectSummary::getLastModified));
+            s3ObjectSummaries.stream().forEach(s3ObjectSummary -> {
+                GetObjectRequest getObjectRequest = new GetObjectRequest(connectorConfig.getBucketName(), s3ObjectSummary.getKey());
+                LinkedList<KafkaRecord> kafkaRecordLinkedList = convertS3ObjectToKafkaRecords(amazonS3.getObject(getObjectRequest).getObjectContent());
+                kafkaRecordLinkedList.stream().forEach(kafkaRecord -> {
+                    if (hasMoreSpaceToAddRecords(sourceRecordList)
+                            && checkValidOffsetOnKafka(kafkaRecord.getPartition(), kafkaRecord.getOffset())
+                            && checkValidOffsetS3(kafkaRecord.getPartition(), kafkaRecord.getOffset())) {
+                        Map<String, String> sourcePartition = Collections.singletonMap(TOPIC_PARTITION_FIELD, keyPartitionOffsetKafkaConnect(kafkaRecord.getPartition()));
+                        Map<String, Long> sourceOffset = Collections.singletonMap(TOPIC_POSITION_FIELD, kafkaRecord.getOffset());
+                        lastOffsetS3Read.put(kafkaRecord.getPartition(), kafkaRecord.getOffset());
+                        sourceRecordList.add(new SourceRecord(sourcePartition, sourceOffset, connectorConfig.getTopicKafkaName(),
+                                kafkaRecord.getPartition(), Schema.BYTES_SCHEMA, kafkaRecord.getKey().array(),
+                                Schema.BYTES_SCHEMA, kafkaRecord.getValue().array(), kafkaRecord.getTimestamp(), headerList(kafkaRecord.getHeaders())));
+                    }
+                });
+            });
+        }
+        return sourceRecordList;
+    }
+
+    @Override
+    public void initialize(SourceTaskContext context) {
+        super.initialize(context);
     }
 
     @Override
     public List<SourceRecord> poll() throws InterruptedException {
-        logger.info("poll");
-        List<SourceRecord> recordsToStore = new ArrayList<>();
-        /*
-
-        try {
-            //create lock file
-            createLockFile();
-
-            if (partitionAssigned < 0) {
-                logger.info("No partition available to restore for topic {} ", connectorConfig.getRestoreTopicName());
+        while (running.get()) {
+            if (partitionAssigned == null || partitionAssigned.length == 0) {
+                logger.error("Please check the configuration. No partition assigned to restore {}", partitionAssigned);
                 return Collections.emptyList();
             }
-
+            logger.info("poll {} {}", Thread.currentThread().getName(), partitionAssigned);
             //restore
-            restore();
-
-
-        } catch (Exception e) {
-            logger.error(e.getMessage(), e);
-        } finally {
-            //remove lock file
-            deleteLockFile();
+            List<SourceRecord> list = restore();
+            if (list.isEmpty()) {
+                logger.info("No data to restore");
+                break;
+            } else {
+                logger.info("Send {} records to store on Kafka", list.size());
+                return list;
+            }
         }
-
-*/
-        return recordsToStore;
+        Thread.sleep(connectorConfig.getPollIntervalMsConfig());
+        return Collections.emptyList();
     }
 
     @Override
     public void stop() {
-
+        logger.info("Stop Restore source task");
+        running.set(false);
     }
 
     @Override
     public void commitRecord(SourceRecord record) throws InterruptedException {
         super.commitRecord(record);
+        logger.info("CommitRecord method -> {} ", record.toString());
     }
 
-    public static <T> T toObject(Class<T> clazz, byte[] bytes) {
-        ByteArrayInputStream bis = null;
-        ObjectInputStream ois = null;
-        try {
-            bis = new ByteArrayInputStream(bytes);
-            ois = new ObjectInputStream(bis);
-            return clazz.cast(ois.readObject());
-        } catch (IOException e) {
-            e.printStackTrace();
-        } catch (ClassNotFoundException e) {
-            e.printStackTrace();
-        } finally {
-            if (bis != null) {
-                try {
-                    bis.close();
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-            }
-            if (ois != null) {
-                try {
-                    ois.close();
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-            }
+    private List<Header> headerList(Map<String, ByteBuffer> mapHeaders) {
+        if (mapHeaders == null) {
+            return Collections.emptyList();
         }
-        return null;
+        List<Header> headerList = new ArrayList<>();
+        ConnectHeaders connectHeaders = new ConnectHeaders();
+        mapHeaders.keySet().iterator().forEachRemaining(header -> {
+            ByteBuffer value = mapHeaders.get(header);
+            connectHeaders.add(header, value, Schema.STRING_SCHEMA);
+        });
+        connectHeaders.iterator().forEachRemaining(header -> {
+            headerList.add(header);
+        });
+
+
+        return headerList;
     }
+
+    private LinkedList<KafkaRecord> convertS3ObjectToKafkaRecords(S3ObjectInputStream s3ObjectInputStream) {
+        LinkedList<KafkaRecord> kafkaRecordLinkedList = new LinkedList<>();
+        BufferedReader reader = new BufferedReader(new InputStreamReader(s3ObjectInputStream));
+        String line = null;
+        try {
+            while ((line = reader.readLine()) != null) {
+                byte[] row = Base64.getDecoder().decode(line.getBytes());
+                kafkaRecordLinkedList.add(kafkaRecordDeserializer.deserialize(ByteBuffer.wrap(row)));
+            }
+        } catch (IOException e) {
+            logger.error(e.getMessage(), e);
+        }
+        return kafkaRecordLinkedList;
+    }
+
+    private String keyPartitionOffsetKafkaConnect(int partition) {
+        return this.connectorConfig.getTopicS3Name() + "-" + this.connectorConfig.getTopicKafkaName() + "-" + partition;
+    }
+
 }

@@ -1,7 +1,6 @@
 package ch.tbd.kafka.backuprestore.backup.storage.partitioner;
 
 import ch.tbd.kafka.backuprestore.backup.kafkaconnect.BackupSinkConnectorConfig;
-import ch.tbd.kafka.backuprestore.backup.storage.format.KafkaRecordWriter;
 import ch.tbd.kafka.backuprestore.backup.storage.format.KafkaRecordWriterMultipartUpload;
 import ch.tbd.kafka.backuprestore.backup.storage.format.RecordWriter;
 import org.apache.kafka.common.TopicPartition;
@@ -68,9 +67,9 @@ public class TopicPartitionWriter {
         failureTime = -1L;
         currentOffset = -1L;
 
-        this.flushSize = this.connectorConfig.getInt(BackupSinkConnectorConfig.FLUSH_SIZE_CONFIG);
-        rotateIntervalMs = this.connectorConfig.getLong(BackupSinkConnectorConfig.ROTATE_INTERVAL_MS_CONFIG);
-        timeoutMs = connectorConfig.getLong(BackupSinkConnectorConfig.RETRY_BACKOFF_CONFIG);
+        this.flushSize = this.connectorConfig.getFlushSize();
+        rotateIntervalMs = this.connectorConfig.getRotateIntervalMs();
+        timeoutMs = this.connectorConfig.getRetryBackoffDefault();
     }
 
     // Visible for testing
@@ -84,9 +83,9 @@ public class TopicPartitionWriter {
         this.tp = tp;
         this.context = context;
         this.partitioner = partitioner;
-        flushSize = connectorConfig.getInt(BackupSinkConnectorConfig.FLUSH_SIZE_CONFIG);
-        rotateIntervalMs = connectorConfig.getLong(BackupSinkConnectorConfig.ROTATE_INTERVAL_MS_CONFIG);
-        timeoutMs = connectorConfig.getLong(BackupSinkConnectorConfig.RETRY_BACKOFF_CONFIG);
+        flushSize = this.connectorConfig.getFlushSize();
+        rotateIntervalMs = connectorConfig.getRotateIntervalMs();
+        timeoutMs = this.connectorConfig.getRetryBackoffDefault();
         buffer = new LinkedList<>();
         writers = new HashMap<>();
         currentSchemas = new HashMap<>();

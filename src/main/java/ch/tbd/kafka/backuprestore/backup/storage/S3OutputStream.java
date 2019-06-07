@@ -23,6 +23,7 @@ import org.slf4j.LoggerFactory;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.nio.Buffer;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
@@ -146,7 +147,7 @@ public class S3OutputStream extends OutputStream {
             log.error("Multipart upload failed to complete for bucket '{}' key '{}'", bucket, key);
             throw new DataException("Multipart upload failed to complete.", e);
         } finally {
-            buffer.clear();
+            ((Buffer)buffer).clear();
             multiPartUpload = null;
             close();
         }
