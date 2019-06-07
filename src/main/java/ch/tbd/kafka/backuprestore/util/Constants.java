@@ -13,7 +13,5 @@ public interface Constants {
 
     public static final byte[] LINE_SEPARATOR_BYTES = System.lineSeparator().getBytes(StandardCharsets.UTF_8);
 
-    public static final String INDEX_RESTORED_FILE_NAME = "index-restoring-file.avro-messages";
-
     public static final String PARTITION_ASSIGNED_KEY = "PARTITION_ASSIGNED_KEY";
 }

@@ -1,21 +1,13 @@
 package ch.tbd.kafka.backuprestore.restore.kafkaconnect.config;
 
-import ch.tbd.kafka.backuprestore.config.ComposableConfig;
-import com.amazonaws.regions.RegionUtils;
-import com.amazonaws.regions.Regions;
-import org.apache.kafka.common.config.AbstractConfig;
+import ch.tbd.kafka.backuprestore.common.kafkaconnect.AbstractBaseConnectorConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.config.ConfigDef.Width;
-import org.apache.kafka.common.config.ConfigException;
-import org.apache.kafka.common.config.types.Password;
-import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Arrays;
-import java.util.List;
 import java.util.Map;
 
 /**
@@ -25,31 +17,29 @@ import java.util.Map;
  * @author iorfinoa
  * @version $$Revision$$
  */
-public class RestoreSourceConnectorConfig extends AbstractConfig implements ComposableConfig {
+public class RestoreSourceConnectorConfig extends AbstractBaseConnectorConfig {
     private static Logger logger = LoggerFactory.getLogger(RestoreSourceConnectorConfig.class);
 
-    public static final String S3_BUCKET_CONFIG = "s3.bucket.name";
-    public static final String TOPIC_S3_NAME = "topic.s3.name";
-    public static final String TOPIC_KAFKA_NAME = "topic.kafka.name";
-    public static final String TOPIC_KAFKA_NAME_DEFAULT = null;
+    public final String DEFAULT_NAME_CONNECTOR = "restore-sink";
 
-    public static final String S3_PROXY_URL_CONFIG = "s3.proxy.url";
-    public static final String S3_PROXY_URL_DEFAULT = "";
+    public static final String TOPIC_S3_NAME = "topic.name";
+    private static final String TOPIC_S3_DOC = "Topic name which you want to restore. The format is topic-name-on-s3:topic-to-use-on-kafka. The topic name to use on kafka is optional." +
+            "Example -> topic-a:topic-b The connector will restore the topic-a from S3 and store the data inside topic-b on kafka" +
+            "Example -> topic-a The connector will restore the topic-a from S3 and store the data inside topic-a on kafka";
+    private static final String TOPIC_S3_DISPLAY = "Topic name to restore";
 
-    public static final String S3_PROXY_PORT_CONFIG = "s3.proxy.port";
-    public static final int S3_PROXY_PORT_DEFAULT = 0;
 
-    public static final String S3_PROXY_USER_CONFIG = "s3.proxy.user";
-    public static final String S3_PROXY_USER_DEFAULT = null;
+    public static final String POLL_INTERVAL_MS_CONFIG = "poll.interval.ms";
+    private static final String POLL_INTERVAL_MS_DOC = "Frequency in ms to poll for new data from S3.";
+    public static final int POLL_INTERVAL_MS_DEFAULT = 5000;
+    private static final String POLL_INTERVAL_MS_DISPLAY = "Poll Interval (ms)";
 
-    public static final String S3_PROXY_PASS_CONFIG = "s3.proxy.password";
-    public static final Password S3_PROXY_PASS_DEFAULT = new Password(null);
-
-    public static final String REGION_CONFIG = "s3.region";
-    public static final String REGION_DEFAULT = Regions.DEFAULT_REGION.getName();
-
-    private String name;
-
+    public static final String BATCH_MAX_RECORDS_CONFIG = "batch.max.record";
+    private static final String BATCH_MAX_RECORDS_DOC =
+            "Maximum number of records to include in a single batch when polling for new data. This "
+                    + "setting can be used to limit the amount of data buffered internally in the connector.";
+    public static final int BATCH_MAX_RECORDS_DEFAULT = 100;
+    private static final String BATCH_MAX_RECORDS_DISPLAY = "Max Record per execution to commit";
 
     public RestoreSourceConnectorConfig(Map<String, String> props) {
         this(conf(), props);
@@ -59,7 +49,6 @@ public class RestoreSourceConnectorConfig extends AbstractConfig implements Comp
     protected RestoreSourceConnectorConfig(ConfigDef conf, Map<String, String> props) {
         super(conf, props);
         logger.info("RestoreSourceConnectorConfig(ConfigDef conf, Map<String, String> props)");
-        this.name = parseName(originalsStrings());
     }
 
     @Override
@@ -67,191 +56,72 @@ public class RestoreSourceConnectorConfig extends AbstractConfig implements Comp
         return super.get(key);
     }
 
-    public String getName() {
-        return name;
-    }
 
     public static ConfigDef conf() {
         logger.info("conf()");
+        ConfigDef configDef = AbstractBaseConnectorConfig.conf();
 
         final String group = "restore-s3";
         int orderInGroup = 0;
-
-        ConfigDef configDef = new ConfigDef()
-                .define(
-                        S3_BUCKET_CONFIG,
-                        ConfigDef.Type.STRING,
-                        Importance.HIGH,
-                        "The S3 Bucket.",
-                        group,
-                        ++orderInGroup,
-                        Width.LONG,
-                        "S3 Bucket"
-                );
 
         configDef.define(
                 TOPIC_S3_NAME,
                 ConfigDef.Type.STRING,
                 Importance.HIGH,
-                "The topic name to search in S3 bucket to restore.",
+                TOPIC_S3_DOC,
                 group,
                 ++orderInGroup,
                 Width.LONG,
-                "The topic name to search in S3 bucket to restore."
-        );
+                TOPIC_S3_DISPLAY);
 
         configDef.define(
-                TOPIC_KAFKA_NAME,
-                ConfigDef.Type.STRING,
-                TOPIC_KAFKA_NAME_DEFAULT,
+                POLL_INTERVAL_MS_CONFIG,
+                Type.INT,
+                POLL_INTERVAL_MS_DEFAULT,
                 Importance.HIGH,
-                "The topic name to use to save in kafka the backup.",
+                POLL_INTERVAL_MS_DOC,
                 group,
                 ++orderInGroup,
-                Width.LONG,
-                "The topic name to use to save in kafka the backup."
-        );
+                Width.SHORT,
+                POLL_INTERVAL_MS_DISPLAY);
 
         configDef.define(
-                S3_PROXY_URL_CONFIG,
-                ConfigDef.Type.STRING,
-                S3_PROXY_URL_DEFAULT,
-                Importance.LOW,
-                "S3 Proxy settings encoded in URL syntax. This property is meant to be used only if you"
-                        + " need to access S3 through a proxy.",
+                BATCH_MAX_RECORDS_CONFIG,
+                Type.INT,
+                BATCH_MAX_RECORDS_DEFAULT,
+                Importance.HIGH,
+                BATCH_MAX_RECORDS_DOC,
                 group,
                 ++orderInGroup,
-                Width.LONG,
-                "S3 Proxy Settings"
-        );
-
-        configDef.define(
-                S3_PROXY_PORT_CONFIG,
-                ConfigDef.Type.INT,
-                S3_PROXY_PORT_DEFAULT,
-                Importance.LOW,
-                "S3 Proxy settings encoded in URL syntax. This property is meant to be used only if you"
-                        + " need to access S3 through a proxy.",
-                group,
-                ++orderInGroup,
-                Width.LONG,
-                "S3 Proxy Settings"
-        );
-
-        configDef.define(
-                S3_PROXY_USER_CONFIG,
-                ConfigDef.Type.STRING,
-                S3_PROXY_USER_DEFAULT,
-                Importance.LOW,
-                "S3 Proxy User. This property is meant to be used only if you"
-                        + " need to access S3 through a proxy. Using ``"
-                        + S3_PROXY_USER_CONFIG
-                        + "`` instead of embedding the username and password in ``"
-                        + S3_PROXY_URL_CONFIG
-                        + "`` allows the password to be hidden in the logs.",
-                group,
-                ++orderInGroup,
-                Width.LONG,
-                "S3 Proxy User"
-        );
-
-        configDef.define(
-                S3_PROXY_PASS_CONFIG,
-                Type.PASSWORD,
-                S3_PROXY_PASS_DEFAULT,
-                Importance.LOW,
-                "S3 Proxy Password. This property is meant to be used only if you"
-                        + " need to access S3 through a proxy. Using ``"
-                        + S3_PROXY_PASS_CONFIG
-                        + "`` instead of embedding the username and password in ``"
-                        + S3_PROXY_URL_CONFIG
-                        + "`` allows the password to be hidden in the logs.",
-                group,
-                ++orderInGroup,
-                Width.LONG,
-                "S3 Proxy Password"
-        );
-
-        configDef.define(
-                REGION_CONFIG,
-                Type.STRING,
-                REGION_DEFAULT,
-                new RegionValidator(),
-                Importance.MEDIUM,
-                "The AWS region to be used the connector.",
-                group,
-                ++orderInGroup,
-                Width.LONG,
-                "AWS region",
-                new RegionRecommender()
-        );
+                Width.SHORT,
+                BATCH_MAX_RECORDS_DISPLAY);
 
         return configDef;
     }
 
-    protected static String parseName(Map<String, String> props) {
-        String nameProp = props.get("name");
-        return nameProp != null ? nameProp : "Restore-sink";
-    }
-
-    public String getBucketName() {
-        return getString(S3_BUCKET_CONFIG);
-    }
 
     public String getTopicS3Name() {
-        return getString(TOPIC_S3_NAME);
+        return getTopicNameByIndex(0);
     }
 
     public String getTopicKafkaName() {
-        String topicKafkaName = getString(TOPIC_KAFKA_NAME);
-        if (topicKafkaName != null && !topicKafkaName.isEmpty()) {
-            return topicKafkaName;
-        }
-        return getTopicS3Name();
+        return getTopicNameByIndex(1);
     }
 
-    public String getProxyUrlConfig() {
-        return getString(S3_PROXY_URL_CONFIG);
+    public int getPollIntervalMsConfig() {
+        return getInt(POLL_INTERVAL_MS_CONFIG);
     }
 
-    public int getProxyPortConfig() {
-        return getInt(S3_PROXY_PORT_CONFIG);
+    public int getBatchMaxRecordsConfig() {
+        return getInt(BATCH_MAX_RECORDS_CONFIG);
     }
 
-    public String getRegionConfig() {
-        return getString(REGION_CONFIG);
-    }
-
-
-    private static class RegionRecommender implements ConfigDef.Recommender {
-        @Override
-        public List<Object> validValues(String name, Map<String, Object> connectorConfigs) {
-            return Arrays.<Object>asList(RegionUtils.getRegions());
+    private String getTopicNameByIndex(int index) {
+        String topic = getString(TOPIC_S3_NAME);
+        if (topic.indexOf(":") > -1) {
+            return topic.split(":")[index];
         }
-
-        @Override
-        public boolean visible(String name, Map<String, Object> connectorConfigs) {
-            return true;
-        }
-    }
-
-    private static class RegionValidator implements ConfigDef.Validator {
-        @Override
-        public void ensureValid(String name, Object region) {
-            String regionStr = ((String) region).toLowerCase().trim();
-            if (RegionUtils.getRegion(regionStr) == null) {
-                throw new ConfigException(
-                        name,
-                        region,
-                        "Value must be one of: " + Utils.join(RegionUtils.getRegions(), ", ")
-                );
-            }
-        }
-
-        @Override
-        public String toString() {
-            return "[" + Utils.join(RegionUtils.getRegions(), ", ") + "]";
-        }
+        return topic;
     }
 
 }

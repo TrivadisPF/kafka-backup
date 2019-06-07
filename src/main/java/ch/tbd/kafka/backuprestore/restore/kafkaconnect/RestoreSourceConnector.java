@@ -12,11 +12,14 @@ import org.apache.kafka.common.config.Config;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.source.SourceConnector;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.*;
 
 public class RestoreSourceConnector extends SourceConnector {
 
+    private Logger logger = LoggerFactory.getLogger(RestoreSourceConnector.class);
     private RestoreSourceConnectorConfig connectorConfig;
     private AmazonS3 amazonS3;
 
@@ -50,6 +53,12 @@ public class RestoreSourceConnector extends SourceConnector {
         Integer[] partitions = partitionsSet.toArray(new Integer[partitionsSet.size()]);
 
         int index = 0;
+
+        if (maxTasks > partitionsSet.size()) {
+            maxTasks = partitionsSet.size();
+            logger.warn("Number of task greather than the partitions present inside the backup. " +
+                    "The number of task will be the same of the number of partitions found inside the backup {}", partitionsSet.size());
+        }
 
         List<Map<String, String>> taskConfigs = new ArrayList<>(maxTasks);
         for (int i = 0; i < maxTasks; ++i) {
