@@ -40,7 +40,6 @@ public class RestoreSourceTask extends SourceTask {
     private Map<Integer, Long> lastOffsetCommittedOnKafka = new HashMap<>();
     private Map<Integer, Long> lastOffsetS3Read = new HashMap<>();
     private final AtomicBoolean running = new AtomicBoolean(false);
-    private String topicNameS3 = null;
 
     @Override
     public String version() {
@@ -64,8 +63,9 @@ public class RestoreSourceTask extends SourceTask {
             logger.error("No partition assigned by Task. Please check the configuration {}", partitionAssigned);
         }
         this.connectorConfig = new RestoreSourceConnectorConfig(map);
-        this.topicNameS3 = connectorConfig.getTopicS3Name();
-        this.amazonS3 = AmazonS3Utils.initConnection(connectorConfig.getRegionConfig(), connectorConfig.getProxyUrlConfig(), connectorConfig.getProxyPortConfig());
+        if (this.amazonS3 == null) {
+            this.amazonS3 = AmazonS3Utils.initConnection(connectorConfig.getRegionConfig(), connectorConfig.getProxyUrlConfig(), connectorConfig.getProxyPortConfig());
+        }
 
         for (int i = 0; i < this.partitionAssigned.length; i++) {
             Map<String, Object> data = context.offsetStorageReader().offset(Collections.singletonMap(TOPIC_PARTITION_FIELD, keyPartitionOffsetKafkaConnect(this.partitionAssigned[i])));
@@ -158,19 +158,19 @@ public class RestoreSourceTask extends SourceTask {
     }
 
     private List<Header> headerList(Map<String, ByteBuffer> mapHeaders) {
-        if (mapHeaders == null) {
-            return Collections.emptyList();
-        }
-        List<Header> headerList = new ArrayList<>();
         ConnectHeaders connectHeaders = new ConnectHeaders();
-        mapHeaders.keySet().iterator().forEachRemaining(header -> {
-            ByteBuffer value = mapHeaders.get(header);
-            connectHeaders.add(header, value, Schema.STRING_SCHEMA);
-        });
+        connectHeaders.addLong(Constants.KEY_HEADER_RESTORED, new Date().getTime());
+        connectHeaders.addBoolean(Constants.KEY_HEADER_RECOVER, Boolean.valueOf(true));
+        List<Header> headerList = new ArrayList<>();
+        if (mapHeaders != null && !mapHeaders.isEmpty()) {
+            mapHeaders.keySet().iterator().forEachRemaining(header -> {
+                ByteBuffer value = mapHeaders.get(header);
+                connectHeaders.add(header, value, Schema.STRING_SCHEMA);
+            });
+        }
         connectHeaders.iterator().forEachRemaining(header -> {
             headerList.add(header);
         });
-
 
         return headerList;
     }

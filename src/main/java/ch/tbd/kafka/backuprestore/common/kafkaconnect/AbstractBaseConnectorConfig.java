@@ -307,7 +307,7 @@ public abstract class AbstractBaseConnectorConfig extends AbstractConfig impleme
         }
     }
 
-    public static class SseKmsKeyIdRecommender implements ConfigDef.Recommender {
+    private static class SseKmsKeyIdRecommender implements ConfigDef.Recommender {
         public SseKmsKeyIdRecommender() {
         }
 
