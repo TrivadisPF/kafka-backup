@@ -22,6 +22,9 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.ByteBuffer;
+import java.nio.charset.Charset;
+import java.time.LocalDateTime;
+import java.time.temporal.ChronoField;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -159,7 +162,7 @@ public class RestoreSourceTask extends SourceTask {
 
     private List<Header> headerList(Map<String, ByteBuffer> mapHeaders) {
         ConnectHeaders connectHeaders = new ConnectHeaders();
-        connectHeaders.addLong(Constants.KEY_HEADER_RESTORED, new Date().getTime());
+        connectHeaders.addBytes(Constants.KEY_HEADER_RESTORED, Long.toString(LocalDateTime.now().getLong(ChronoField.MICRO_OF_SECOND)).getBytes(Charset.forName("UTF-8")));
         connectHeaders.addBoolean(Constants.KEY_HEADER_RECOVER, Boolean.valueOf(true));
         List<Header> headerList = new ArrayList<>();
         if (mapHeaders != null && !mapHeaders.isEmpty()) {

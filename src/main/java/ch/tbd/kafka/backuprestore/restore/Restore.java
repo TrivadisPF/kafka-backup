@@ -13,8 +13,6 @@ import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.serialization.ByteBufferSerializer;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
@@ -25,8 +23,6 @@ import java.util.Properties;
 
 //TODO: parametrize: strategy for headers, timestamps, and topicName, restore to a different kafka cluster
 public class Restore {
-
-    private static final Logger LOGGER = LoggerFactory.getLogger(Restore.class);
 
     private static final String RESTORED_HEADER = "x-restored";
 

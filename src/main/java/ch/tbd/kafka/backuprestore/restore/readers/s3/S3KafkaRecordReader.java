@@ -18,6 +18,8 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 
+//TODO: Old class. Remove it?
+@Deprecated
 public class S3KafkaRecordReader extends AbstractKafkaRecordReader {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(S3KafkaRecordReader.class);

@@ -14,22 +14,21 @@ import java.util.Properties;
  */
 public class Version {
     private static final Logger log = LoggerFactory.getLogger(Version.class);
-    private static String VERSION = "unknown";
-    private static final String file = "/kafka-backup-restore.properties";
+    private static String versionConnector = "unknown";
+    private static final String FILE = "/kafka-backup-restore.properties";
 
     static {
         try {
             Properties props = new Properties();
-            props.load(Version.class.getResourceAsStream(file));
-            VERSION = props.getProperty("version", VERSION).trim();
+            props.load(Version.class.getResourceAsStream(FILE));
+            versionConnector = props.getProperty("version", versionConnector).trim();
         } catch (Exception e) {
-            log.warn("Error while loading version:" + file, e);
+            log.warn("Error while loading version:" + FILE, e);
         }
-        log.info(VERSION);
     }
 
     public static String getVersion() {
-        return VERSION;
+        return versionConnector;
     }
 
 }

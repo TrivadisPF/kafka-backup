@@ -15,7 +15,6 @@ import java.util.Map;
 public class BackupSinkConnector extends SinkConnector {
 
     private static final Logger logger = LoggerFactory.getLogger(BackupSinkConnector.class);
-    private Map<String, String> configProps;
     private BackupSinkConnectorConfig config;
 
     public BackupSinkConnector() {
@@ -29,7 +28,6 @@ public class BackupSinkConnector extends SinkConnector {
 
     @Override
     public void start(Map<String, String> map) {
-        configProps = new HashMap<>(map);
         config = new BackupSinkConnectorConfig(map);
         logger.info("Starting backup sink connector {}", config.getName());
     }
