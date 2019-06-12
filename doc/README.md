@@ -9,7 +9,7 @@ We will also backup some of the internal topics
 * `__consumer_offsets` - this is the topic where the consumer commits its offsets by default. We have to backup this topic not really to be able to restore it, but to be able to do the offset translation upon restore. The backup is needed because a deletion of a "normal" topic through Kafka Admin will write a record with a NULL value to this topic, which will remove the offsets for that topic upon the next compaction cycle ([Issue 15](https://github.com/TrivadisPF/kafka-backup/issues/15))
 * `_schemas` - 
 
-## Serialization
+## Serialisation
 
 Each record from Kafka is written to the Backup serialised as an Avro Record in the following format:
 
