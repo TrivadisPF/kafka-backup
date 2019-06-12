@@ -15,9 +15,6 @@ public class DefaultPartitioner<T> implements Partitioner<T> {
     private static final String TOPIC_FIELD = "topic";
     private static final String PARTITION_FIELD = "partition";
 
-    private static final String SCHEMA_GENERATOR_CLASS =
-            "ch.tbd.kafka.backuprestore.backup.storage.partitioner.DefaultSchemaGenerator";
-
     protected Map<String, Object> config;
 
     @Override

@@ -18,9 +18,10 @@ import java.util.List;
 
 //TODO: write more records in one file (one file for time unit?)
 //TODO: flush
+//TODO: Old class. Remove it?
+@Deprecated
 public class S3KafkaRecordWriter extends AbstractKafkaRecordWriter {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(S3KafkaRecordWriter.class);
     private AmazonS3 amazonS3;
     private String bucket;
 

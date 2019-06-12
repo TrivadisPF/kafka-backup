@@ -12,7 +12,6 @@ import org.apache.kafka.connect.errors.RetriableException;
 import org.apache.kafka.connect.errors.SchemaProjectorException;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTaskContext;
-import org.joda.time.DateTimeZone;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -46,7 +45,6 @@ public class TopicPartitionWriter {
     private long timeoutMs;
     private long failureTime;
     private final Time time;
-    private DateTimeZone timeZone;
     private final BackupSinkConnectorConfig connectorConfig;
 
     public TopicPartitionWriter(TopicPartition tp,
@@ -116,7 +114,7 @@ public class TopicPartitionWriter {
 
         while (!buffer.isEmpty()) {
             try {
-                executeState(now);
+                executeState();
             } catch (SchemaProjectorException | IllegalWorkerStateException e) {
                 throw new ConnectException(e);
             } catch (RetriableException e) {
@@ -126,11 +124,10 @@ public class TopicPartitionWriter {
                 break;
             }
         }
-        commitOnTimeIfNoData(now);
+        commitOnTimeIfNoData();
     }
 
-    @SuppressWarnings("fallthrough")
-    private void executeState(long now) {
+    private void executeState() {
         switch (state) {
             case WRITE_STARTED:
                 pause();
@@ -147,8 +144,7 @@ public class TopicPartitionWriter {
 
                 if (!checkRotationOrAppend(
                         record,
-                        encodedPartition,
-                        now
+                        encodedPartition
                 )) {
                     break;
                 }
@@ -167,10 +163,9 @@ public class TopicPartitionWriter {
 
     private boolean checkRotationOrAppend(
             SinkRecord record,
-            String encodedPartition,
-            long now
+            String encodedPartition
     ) {
-        if (rotateOnTime(encodedPartition, currentTimestamp, now)) {
+        if (rotateOnTime(encodedPartition, currentTimestamp)) {
             nextState();
         } else {
             currentEncodedPartition = encodedPartition;
@@ -191,11 +186,11 @@ public class TopicPartitionWriter {
         return true;
     }
 
-    private void commitOnTimeIfNoData(long now) {
+    private void commitOnTimeIfNoData() {
         if (buffer.isEmpty()) {
             // committing files after waiting for rotateIntervalMs time but less than flush.size
             // records available
-            if (recordCount > 0 && rotateOnTime(currentEncodedPartition, currentTimestamp, now)) {
+            if (recordCount > 0 && rotateOnTime(currentEncodedPartition, currentTimestamp)) {
                 log.info(
                         "Committing files after waiting for rotateIntervalMs time but less than flush.size "
                                 + "records available."
@@ -215,7 +210,7 @@ public class TopicPartitionWriter {
         }
     }
 
-    public void close() throws ConnectException {
+    public void close() {
         log.debug("Closing TopicPartitionWriter {}", tp);
         for (RecordWriter writer : writers.values()) {
             writer.close();
@@ -242,7 +237,7 @@ public class TopicPartitionWriter {
         this.state = state;
     }
 
-    private boolean rotateOnTime(String encodedPartition, Long recordTimestamp, long now) {
+    private boolean rotateOnTime(String encodedPartition, Long recordTimestamp) {
         if (recordCount <= 0) {
             return false;
         }
@@ -294,15 +289,11 @@ public class TopicPartitionWriter {
         context.resume(tp);
     }
 
-    private RecordWriter getWriter(SinkRecord record, String encodedPartition)
-            throws ConnectException {
+    private RecordWriter getWriter(String encodedPartition) {
         if (writers.containsKey(encodedPartition)) {
             return writers.get(encodedPartition);
         }
-        //String commitFilename = getCommitFilename(encodedPartition);
-
         // TODO: Optimize how to extract an instance of RecordWriter
-        //RecordWriter writer = new KafkaRecordWriter(connectorConfig);
         RecordWriter writer = new KafkaRecordWriterMultipartUpload(connectorConfig);
         writers.put(encodedPartition, writer);
         return writer;
@@ -320,7 +311,7 @@ public class TopicPartitionWriter {
             startOffsets.put(currentEncodedPartition, currentOffset);
         }
 
-        RecordWriter writer = getWriter(record, currentEncodedPartition);
+        RecordWriter writer = getWriter(currentEncodedPartition);
         writer.write(record);
         ++recordCount;
     }
@@ -339,7 +330,7 @@ public class TopicPartitionWriter {
 
     private void commitFile(String encodedPartition) {
         if (!startOffsets.containsKey(encodedPartition)) {
-            log.warn("Tried to commit file with missing starting offset partition: {}. Ignoring.");
+            log.warn("Tried to commit file with missing starting offset partition: {}. Ignoring.", encodedPartition);
             return;
         }
 

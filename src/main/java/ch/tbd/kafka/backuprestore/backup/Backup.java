@@ -23,7 +23,6 @@ import java.util.Properties;
 public class Backup {
     private static final Logger LOGGER = LoggerFactory.getLogger(Backup.class);
 
-    private final Properties config = new Properties();
     private String region;
     private String bucket;
     private String bootstrapServer;
@@ -36,7 +35,7 @@ public class Backup {
 
     public void backup(String topic) {
         final Properties config = new Properties();
-        config.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
+        config.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServer);
         config.put(ConsumerConfig.GROUP_ID_CONFIG, "Backup");
         config.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ByteBufferDeserializer.class.getName());
         config.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteBufferDeserializer.class.getName());
@@ -62,7 +61,7 @@ public class Backup {
                     }
                     kafkaRecords.add(kafkaRecord);
                 });
-                if (kafkaRecords.size() > 0) {
+                if (!kafkaRecords.isEmpty()) {
                     kafkaRecordWriter.write(kafkaRecords);
                 }
                 //TODO Exactly once??!!!

@@ -298,7 +298,7 @@ public abstract class AbstractBaseConnectorConfig extends AbstractConfig impleme
         @Override
         public List<Object> validValues(String name, Map<String, Object> connectorConfigs) {
             List<SSEAlgorithm> list = Arrays.asList(SSEAlgorithm.values());
-            return new ArrayList<Object>(list);
+            return new ArrayList<>(list);
         }
 
         @Override
@@ -307,9 +307,7 @@ public abstract class AbstractBaseConnectorConfig extends AbstractConfig impleme
         }
     }
 
-    public static class SseKmsKeyIdRecommender implements ConfigDef.Recommender {
-        public SseKmsKeyIdRecommender() {
-        }
+    private static class SseKmsKeyIdRecommender implements ConfigDef.Recommender {
 
         @Override
         public List<Object> validValues(String name, Map<String, Object> connectorConfigs) {
@@ -343,8 +341,8 @@ public abstract class AbstractBaseConnectorConfig extends AbstractConfig impleme
     }
 
     private static class CannedAclValidator implements ConfigDef.Validator {
-        public static final Map<String, CannedAccessControlList> ACLS_BY_HEADER_VALUE = new HashMap<>();
-        public static final String ALLOWED_VALUES;
+        protected static final Map<String, CannedAccessControlList> ACLS_BY_HEADER_VALUE = new HashMap<>();
+        protected static final String ALLOWED_VALUES;
 
         static {
             List<String> aclHeaderValues = new ArrayList<>();

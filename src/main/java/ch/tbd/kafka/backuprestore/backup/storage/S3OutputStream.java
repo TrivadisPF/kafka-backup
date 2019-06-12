@@ -6,16 +6,7 @@ import com.amazonaws.AmazonClientException;
 import com.amazonaws.event.ProgressEvent;
 import com.amazonaws.event.ProgressListener;
 import com.amazonaws.services.s3.AmazonS3;
-import com.amazonaws.services.s3.model.AbortMultipartUploadRequest;
-import com.amazonaws.services.s3.model.CannedAccessControlList;
-import com.amazonaws.services.s3.model.CompleteMultipartUploadRequest;
-import com.amazonaws.services.s3.model.InitiateMultipartUploadRequest;
-import com.amazonaws.services.s3.model.ObjectMetadata;
-import com.amazonaws.services.s3.model.PartETag;
-import com.amazonaws.services.s3.model.SSEAlgorithm;
-import com.amazonaws.services.s3.model.SSECustomerKey;
-import com.amazonaws.services.s3.model.SSEAwsKeyManagementParams;
-import com.amazonaws.services.s3.model.UploadPartRequest;
+import com.amazonaws.services.s3.model.*;
 import org.apache.kafka.connect.errors.DataException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -118,10 +109,10 @@ public class S3OutputStream extends OutputStream {
         try {
             multiPartUpload.uploadPart(new ByteArrayInputStream(buffer.array()), size);
         } catch (Exception e) {
-            if (multiPartUpload != null) {
-                multiPartUpload.abort();
-                log.debug("Multipart upload aborted for bucket '{}' key '{}'.", bucket, key);
-            }
+            //if (multiPartUpload != null) {
+            multiPartUpload.abort();
+            log.debug("Multipart upload aborted for bucket '{}' key '{}'.", bucket, key);
+            //}
             throw new IOException("Part upload failed: ", e.getCause());
         }
     }
@@ -147,7 +138,7 @@ public class S3OutputStream extends OutputStream {
             log.error("Multipart upload failed to complete for bucket '{}' key '{}'", bucket, key);
             throw new DataException("Multipart upload failed to complete.", e);
         } finally {
-            ((Buffer)buffer).clear();
+            ((Buffer) buffer).clear();
             multiPartUpload = null;
             close();
         }
@@ -256,7 +247,7 @@ public class S3OutputStream extends OutputStream {
     // Dummy listener for now, just logs the event progress.
     private static class ConnectProgressListener implements ProgressListener {
         public void progressChanged(ProgressEvent progressEvent) {
-            log.debug("Progress event: " + progressEvent);
+            log.debug("Progress event: {}", progressEvent);
         }
     }
 
