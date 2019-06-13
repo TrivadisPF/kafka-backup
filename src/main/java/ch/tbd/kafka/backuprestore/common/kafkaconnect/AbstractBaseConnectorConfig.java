@@ -1,11 +1,3 @@
-/*
- * ------------------------------------------------------------------------------------------------
- * Copyright 2014 by Swiss Post, Information Technology Services
- * ------------------------------------------------------------------------------------------------
- * $Id$
- * ------------------------------------------------------------------------------------------------
- */
-
 package ch.tbd.kafka.backuprestore.common.kafkaconnect;
 
 import ch.tbd.kafka.backuprestore.config.ComposableConfig;

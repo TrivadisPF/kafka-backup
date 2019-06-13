@@ -17,7 +17,7 @@ The documentation is available [here](doc/README.md).
 
 EXAMPLE SINK BACKUP CONNECTOR
 ```
-curl -X PUT http://localhost:8084/connectors/backup/config -H 'Content-Type: application/json' -H 'Accept: application/json' --data '{"connector.class":"ch.tbd.kafka.backuprestore.backup.kafkaconnect.BackupSinkConnector", "value.converter": "org.apache.kafka.connect.converters.ByteArrayConverter", "key.converter":"org.apache.kafka.connect.converters.ByteArrayConverter", "topics":"test-topic", "flush.size":"3", "s3.bucket.name":"TBD", "s3.region":"eu-central-1", "s3.proxy.url": "TBD", "s3.proxy.port": "TBD"}'
+curl -X PUT http://localhost:8084/connectors/backup/config -H 'Content-Type: application/json' -H 'Accept: application/json' --data '{"connector.class":"ch.tbd.kafka.backuprestore.backup.kafkaconnect.BackupSinkConnector", "value.converter": "org.apache.kafka.connect.converters.ByteArrayConverter", "key.converter":"org.apache.kafka.connect.converters.ByteArrayConverter", "topics":"test-topic", "flush.size":"3", "s3.bucket.name":"TBD", "s3.region":"eu-central-1", "s3.proxy.url": "TBD", "s3.proxy.port": "TBD", "tasks.max":"1"}'
 
 ```
 EXAMPLE SOURCE RESTORE CONNECTOR
