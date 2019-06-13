@@ -1,5 +1,6 @@
 package ch.tbd.kafka.backuprestore.util;
 
+import ch.tbd.kafka.backuprestore.common.kafkaconnect.AbstractBaseConnectorConfig;
 import com.amazonaws.ClientConfiguration;
 import com.amazonaws.Protocol;
 import com.amazonaws.auth.profile.ProfileCredentialsProvider;
@@ -17,19 +18,15 @@ public class AmazonS3Utils {
 
     public static final String SEPARATOR = "/";
 
-    public static AmazonS3 initConnection(String region) {
-        return initConnection(region, null, -1);
-    }
-
-    public static AmazonS3 initConnection(String region, String proxyUrlConfig, int proxyPortConfig) {
+    public static AmazonS3 initConnection(AbstractBaseConnectorConfig connectorConfig) {
         AmazonS3ClientBuilder builder = AmazonS3ClientBuilder.standard();
-        builder.withRegion(region);
+        builder.withRegion(connectorConfig.getRegionConfig());
         builder.setCredentials(new ProfileCredentialsProvider());
-        if (proxyUrlConfig != null && !proxyUrlConfig.isEmpty() && proxyPortConfig > 0) {
+        if (connectorConfig.getProxyUrlConfig() != null && !connectorConfig.getProxyUrlConfig().isEmpty() && connectorConfig.getProxyPortConfig() > 0) {
             ClientConfiguration config = new ClientConfiguration();
             config.setProtocol(Protocol.HTTPS);
-            config.setProxyHost(proxyUrlConfig);
-            config.setProxyPort(proxyPortConfig);
+            config.setProxyHost(connectorConfig.getProxyUrlConfig());
+            config.setProxyPort(connectorConfig.getProxyPortConfig());
             builder.withClientConfiguration(config);
         }
         return builder.build();

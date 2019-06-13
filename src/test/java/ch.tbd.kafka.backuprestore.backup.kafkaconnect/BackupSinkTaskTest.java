@@ -42,8 +42,8 @@ public class BackupSinkTaskTest {
 
     private static final Logger log = LoggerFactory.getLogger(BackupSinkTaskTest.class);
 
-    protected static final String TOPIC = "test-topic";
-    protected static final String TOPIC_NEW = "test-topic-new";
+    protected static final String TOPIC = "test-topic-2";
+    protected static final String TOPIC_NEW = "test-topic-new-2";
     protected static final int PARTITION = 0;
     protected static final int PARTITION2 = 13;
     protected static final int PARTITION3 = 14;
@@ -149,7 +149,6 @@ public class BackupSinkTaskTest {
         for (S3ObjectSummary obj : listPartitions) {
             GetObjectRequest getObjectRequest = new GetObjectRequest(connectorConfig.getBucketName(), obj.getKey());
             AvroKafkaRecord[] records = toObject(AvroKafkaRecord[].class, IOUtils.toByteArray(amazonS3.getObject(getObjectRequest).getObjectContent()));
-            System.out.println(records);
         }
     }
 

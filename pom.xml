@@ -78,7 +78,7 @@
 
     <properties>
         <kafka.version>2.2.0</kafka.version>
-        <s3.version>1.11.543</s3.version>
+        <s3.version>1.11.570</s3.version>
         <guava.version>18.0</guava.version>
         <avro.version>1.8.2</avro.version>
         <spring-shell-starter.version>2.0.0.RELEASE</spring-shell-starter.version>
