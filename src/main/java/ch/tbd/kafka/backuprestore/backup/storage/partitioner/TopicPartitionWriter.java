@@ -3,6 +3,8 @@ package ch.tbd.kafka.backuprestore.backup.storage.partitioner;
 import ch.tbd.kafka.backuprestore.backup.kafkaconnect.BackupSinkConnectorConfig;
 import ch.tbd.kafka.backuprestore.backup.storage.format.KafkaRecordWriterMultipartUpload;
 import ch.tbd.kafka.backuprestore.backup.storage.format.RecordWriter;
+import ch.tbd.kafka.backuprestore.util.AmazonS3Utils;
+import com.amazonaws.services.s3.AmazonS3;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.data.Schema;
@@ -46,6 +48,7 @@ public class TopicPartitionWriter {
     private long failureTime;
     private final Time time;
     private final BackupSinkConnectorConfig connectorConfig;
+    private AmazonS3 amazonS3;
 
     public TopicPartitionWriter(TopicPartition tp,
                                 BackupSinkConnectorConfig connectorConfig,
@@ -68,6 +71,7 @@ public class TopicPartitionWriter {
         this.flushSize = this.connectorConfig.getFlushSize();
         rotateIntervalMs = this.connectorConfig.getRotateIntervalMs();
         timeoutMs = this.connectorConfig.getRetryBackoffDefault();
+        this.amazonS3 = AmazonS3Utils.initConnection(this.connectorConfig);
     }
 
     // Visible for testing
@@ -91,6 +95,7 @@ public class TopicPartitionWriter {
         state = State.WRITE_STARTED;
         failureTime = -1L;
         currentOffset = -1L;
+        this.amazonS3 = AmazonS3Utils.initConnection(this.connectorConfig);
     }
 
     private enum State {
@@ -294,7 +299,7 @@ public class TopicPartitionWriter {
             return writers.get(encodedPartition);
         }
         // TODO: Optimize how to extract an instance of RecordWriter
-        RecordWriter writer = new KafkaRecordWriterMultipartUpload(connectorConfig);
+        RecordWriter writer = new KafkaRecordWriterMultipartUpload(connectorConfig, amazonS3);
         writers.put(encodedPartition, writer);
         return writer;
     }

@@ -1,14 +1,7 @@
-/*
- * ------------------------------------------------------------------------------------------------
- * Copyright 2014 by Swiss Post, Information Technology Services
- * ------------------------------------------------------------------------------------------------
- * $Id$
- * ------------------------------------------------------------------------------------------------
- */
-
 package ch.tbd.kafka.backuprestore.common.kafkaconnect;
 
 import ch.tbd.kafka.backuprestore.config.ComposableConfig;
+import com.amazonaws.auth.AWSCredentialsProvider;
 import com.amazonaws.regions.RegionUtils;
 import com.amazonaws.regions.Regions;
 import com.amazonaws.services.s3.model.CannedAccessControlList;
@@ -36,7 +29,6 @@ import java.util.*;
 public abstract class AbstractBaseConnectorConfig extends AbstractConfig implements ComposableConfig {
 
     private static Logger logger = LoggerFactory.getLogger(AbstractBaseConnectorConfig.class);
-
     private static final String S3_BUCKET_CONFIG = "s3.bucket.name";
     private static final String S3_BUCKET_DOC = "The S3 Bucket.";
     private static final String S3_BUCKET_DISPLAY = "S3 Bucket";
@@ -64,19 +56,19 @@ public abstract class AbstractBaseConnectorConfig extends AbstractConfig impleme
     private static final String ACL_CANNED_DEFAULT = null;
     private static final String ACL_CANNED_DISPLAY = "S3 Canned ACL";
 
-    private static final String S3_PROXY_URL_CONFIG = "s3.proxy.url";
+    public static final String S3_PROXY_URL_CONFIG = "s3.proxy.url";
     private static final String S3_PROXY_URL_DOC = "S3 Proxy settings encoded in URL syntax. This property is meant to be used only if you"
             + " need to access S3 through a proxy.";
     private static final String S3_PROXY_URL_DEFAULT = "";
     private static final String S3_PROXY_URL_DISPLAY = "S3 Proxy Settings";
 
-    private static final String S3_PROXY_PORT_CONFIG = "s3.proxy.port";
+    public static final String S3_PROXY_PORT_CONFIG = "s3.proxy.port";
     private static final String S3_PROXY_PORT_DOC = "S3 Proxy settings encoded in URL syntax. This property is meant to be used only if you"
             + " need to access S3 through a proxy.";
     private static final int S3_PROXY_PORT_DEFAULT = 0;
     private static final String S3_PROXY_PORT_DISPLAY = "S3 Proxy Settings";
 
-    private static final String S3_PROXY_USER_CONFIG = "s3.proxy.user";
+    public static final String S3_PROXY_USER_CONFIG = "s3.proxy.user";
     private static final String S3_PROXY_USER_DOC = "S3 Proxy User. This property is meant to be used only if you"
             + " need to access S3 through a proxy. Using ``"
             + S3_PROXY_USER_CONFIG
@@ -86,7 +78,7 @@ public abstract class AbstractBaseConnectorConfig extends AbstractConfig impleme
     private static final String S3_PROXY_USER_DEFAULT = null;
     private static final String S3_PROXY_USER_DISPLAY = "S3 Proxy User";
 
-    private static final String S3_PROXY_PASS_CONFIG = "s3.proxy.password";
+    public static final String S3_PROXY_PASS_CONFIG = "s3.proxy.password";
     private static final String S3_PROXY_PASS_DOC = "S3 Proxy Password. This property is meant to be used only if you"
             + " need to access S3 through a proxy. Using ``"
             + S3_PROXY_PASS_CONFIG
@@ -96,13 +88,18 @@ public abstract class AbstractBaseConnectorConfig extends AbstractConfig impleme
     private static final Password S3_PROXY_PASS_DEFAULT = new Password(null);
     private static final String S3_PROXY_PASS_DISPLAY = "S3 Proxy Password";
 
-    private static final String REGION_CONFIG = "s3.region";
-    private static final String REGION_DOC = "The AWS region to be used the connector.";
-    private static final String REGION_DEFAULT = Regions.DEFAULT_REGION.getName();
-    private static final String REGION_DISPLAY = "AWS region";
+    public static final String S3_REGION_CONFIG = "s3.region";
+    private static final String S3_REGION_DOC = "The AWS region to be used the connector.";
+    private static final String S3_REGION_DEFAULT = Regions.DEFAULT_REGION.getName();
+    private static final String S3_REGION_DISPLAY = "AWS region";
+
+    public static final String WAN_MODE_CONFIG = "s3.wan.mode";
+    private static final boolean WAN_MODE_DEFAULT = false;
+
 
     protected AbstractBaseConnectorConfig(ConfigDef conf, Map<String, String> props) {
         super(conf, props);
+
         logger.info("AbstractBaseConnectorConfig(ConfigDef conf, Map<String, String> props)");
     }
 
@@ -234,17 +231,29 @@ public abstract class AbstractBaseConnectorConfig extends AbstractConfig impleme
         );
 
         configDef.define(
-                REGION_CONFIG,
+                S3_REGION_CONFIG,
                 Type.STRING,
-                REGION_DEFAULT,
+                S3_REGION_DEFAULT,
                 new RegionValidator(),
                 Importance.MEDIUM,
-                REGION_DOC,
+                S3_REGION_DOC,
                 group,
                 ++orderInGroup,
                 Width.LONG,
-                REGION_DISPLAY,
+                S3_REGION_DISPLAY,
                 new RegionRecommender()
+        );
+
+        configDef.define(
+                WAN_MODE_CONFIG,
+                Type.BOOLEAN,
+                WAN_MODE_DEFAULT,
+                Importance.MEDIUM,
+                "Use S3 accelerated endpoint.",
+                group,
+                ++orderInGroup,
+                Width.LONG,
+                "S3 accelerated endpoint enabled"
         );
 
         return configDef;
@@ -279,7 +288,7 @@ public abstract class AbstractBaseConnectorConfig extends AbstractConfig impleme
     }
 
     public String getRegionConfig() {
-        return getString(REGION_CONFIG);
+        return getString(S3_REGION_CONFIG);
     }
 
     private static class RegionRecommender implements ConfigDef.Recommender {
@@ -367,6 +376,26 @@ public abstract class AbstractBaseConnectorConfig extends AbstractConfig impleme
         @Override
         public String toString() {
             return "[" + ALLOWED_VALUES + "]";
+        }
+    }
+
+    private static class CredentialsProviderValidator implements ConfigDef.Validator {
+        @Override
+        public void ensureValid(String name, Object provider) {
+            if (provider != null && provider instanceof Class
+                    && AWSCredentialsProvider.class.isAssignableFrom((Class<?>) provider)) {
+                return;
+            }
+            throw new ConfigException(
+                    name,
+                    provider,
+                    "Class must extend: " + AWSCredentialsProvider.class
+            );
+        }
+
+        @Override
+        public String toString() {
+            return "Any class implementing: " + AWSCredentialsProvider.class;
         }
     }
 

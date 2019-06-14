@@ -5,8 +5,8 @@ import ch.tbd.kafka.backuprestore.util.AmazonS3Utils;
 import ch.tbd.kafka.backuprestore.util.Constants;
 import ch.tbd.kafka.backuprestore.util.Version;
 import com.amazonaws.services.s3.AmazonS3;
-import com.amazonaws.services.s3.model.ListObjectsV2Request;
-import com.amazonaws.services.s3.model.ListObjectsV2Result;
+import com.amazonaws.services.s3.model.ListObjectsRequest;
+import com.amazonaws.services.s3.model.ObjectListing;
 import com.amazonaws.services.s3.model.S3ObjectSummary;
 import org.apache.kafka.common.config.Config;
 import org.apache.kafka.common.config.ConfigDef;
@@ -25,9 +25,8 @@ public class RestoreSourceConnector extends SourceConnector {
 
     @Override
     public void start(Map<String, String> map) {
-        connectorConfig = new RestoreSourceConnectorConfig(map);
-        amazonS3 = AmazonS3Utils.initConnection(connectorConfig.getRegionConfig(),
-                connectorConfig.getProxyUrlConfig(), connectorConfig.getProxyPortConfig());
+        this.connectorConfig = new RestoreSourceConnectorConfig(map);
+        this.amazonS3 = AmazonS3Utils.initConnection(this.connectorConfig);
     }
 
     @Override
@@ -37,11 +36,15 @@ public class RestoreSourceConnector extends SourceConnector {
 
     @Override
     public List<Map<String, String>> taskConfigs(int maxTasks) {
-        ListObjectsV2Request req = new ListObjectsV2Request().
+        ListObjectsRequest req = new ListObjectsRequest().
                 withBucketName(connectorConfig.getBucketName()).withPrefix(connectorConfig.getTopicS3Name() + AmazonS3Utils.SEPARATOR);
-        ListObjectsV2Result result = amazonS3.listObjectsV2(req);
+        ObjectListing result = amazonS3.listObjects(req);
 
         List<S3ObjectSummary> s3ObjectSummaries = result.getObjectSummaries();
+        while (result.isTruncated()) {
+            result = amazonS3.listNextBatchOfObjects(result);
+            s3ObjectSummaries.addAll(result.getObjectSummaries());
+        }
         Set<Integer> partitionsSet = new HashSet<>();
 
         s3ObjectSummaries.stream().forEach(s3ObjectSummary -> {

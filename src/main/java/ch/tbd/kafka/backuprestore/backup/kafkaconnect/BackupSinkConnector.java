@@ -2,6 +2,7 @@ package ch.tbd.kafka.backuprestore.backup.kafkaconnect;
 
 import ch.tbd.kafka.backuprestore.util.Version;
 import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.connect.connector.ConnectorContext;
 import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.sink.SinkConnector;
 import org.slf4j.Logger;
@@ -19,6 +20,16 @@ public class BackupSinkConnector extends SinkConnector {
 
     public BackupSinkConnector() {
 
+    }
+
+    @Override
+    public void initialize(ConnectorContext ctx, List<Map<String, String>> taskConfigs) {
+        super.initialize(ctx, taskConfigs);
+    }
+
+    @Override
+    public void reconfigure(Map<String, String> props) {
+        super.reconfigure(props);
     }
 
     // Only for test

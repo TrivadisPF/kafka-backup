@@ -32,7 +32,8 @@ curl -X PUT http://localhost:8084/connectors/backup/config \
 	     "s3.bucket.name":"TBD", 
 	     "s3.region":"eu-central-1", 
 	     "s3.proxy.url": "TBD", 
-	     "s3.proxy.port": "TBD"
+	     "s3.proxy.port": "TBD",
+	     "tasks.max":"1"
      }'
 ```
 
