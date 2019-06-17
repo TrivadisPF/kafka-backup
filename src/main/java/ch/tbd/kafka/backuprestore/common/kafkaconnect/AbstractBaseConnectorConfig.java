@@ -59,13 +59,13 @@ public abstract class AbstractBaseConnectorConfig extends AbstractConfig impleme
     private static final String S3_PROXY_URL_DOC = "S3 Proxy settings encoded in URL syntax. This property is meant to be used only if you"
             + " need to access S3 through a proxy.";
     private static final String S3_PROXY_URL_DEFAULT = "";
-    private static final String S3_PROXY_URL_DISPLAY = "S3 Proxy Settings";
+    private static final String S3_PROXY_URL_DISPLAY = "S3 Proxy URL Settings";
 
     public static final String S3_PROXY_PORT_CONFIG = "s3.proxy.port";
     private static final String S3_PROXY_PORT_DOC = "S3 Proxy settings encoded in URL syntax. This property is meant to be used only if you"
             + " need to access S3 through a proxy.";
     private static final int S3_PROXY_PORT_DEFAULT = 0;
-    private static final String S3_PROXY_PORT_DISPLAY = "S3 Proxy Settings";
+    private static final String S3_PROXY_PORT_DISPLAY = "S3 Proxy Port Settings";
 
     public static final String S3_PROXY_USER_CONFIG = "s3.proxy.user";
     private static final String S3_PROXY_USER_DOC = "S3 Proxy User. This property is meant to be used only if you"

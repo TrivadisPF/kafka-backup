@@ -19,7 +19,6 @@ import org.apache.kafka.connect.header.ConnectHeaders;
 import org.apache.kafka.connect.header.Header;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTask;
-import org.apache.kafka.connect.source.SourceTaskContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -34,7 +33,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public class RestoreSourceTask extends SourceTask {
 
     private final Logger logger = LoggerFactory.getLogger(RestoreSourceTask.class);
-    private final static String SEPARATOR = "/";
     private KafkaRecordDeserializer kafkaRecordDeserializer = new KafkaRecordAvroDeserializer();
 
     private static final String TOPIC_PARTITION_FIELD = "TOPIC_PARTITION_NAME";
@@ -54,19 +52,19 @@ public class RestoreSourceTask extends SourceTask {
 
     @Override
     public void start(Map<String, String> map) {
-        String partitionAssigned = map.get(Constants.PARTITION_ASSIGNED_KEY);
-        if (partitionAssigned != null && partitionAssigned.indexOf(";") == -1) {
+        String partitionAssignedInConnector = map.get(Constants.PARTITION_ASSIGNED_KEY);
+        if (partitionAssignedInConnector != null && partitionAssignedInConnector.indexOf(";") == -1) {
             //I have only one partition
             this.partitionAssigned = new int[1];
-            this.partitionAssigned[0] = Integer.parseInt(partitionAssigned);
-        } else if (partitionAssigned != null && partitionAssigned.indexOf(";") > -1) {
-            String[] split = partitionAssigned.split(";");
+            this.partitionAssigned[0] = Integer.parseInt(partitionAssignedInConnector);
+        } else if (partitionAssignedInConnector != null && partitionAssignedInConnector.indexOf(";") > -1) {
+            String[] split = partitionAssignedInConnector.split(";");
             this.partitionAssigned = new int[split.length];
             for (int i = 0; i < split.length; i++) {
                 this.partitionAssigned[i] = Integer.parseInt(split[i]);
             }
         } else {
-            logger.error("No partition assigned by Task. Please check the configuration {}", partitionAssigned);
+            logger.error("No partition assigned by Task. Please check the configuration {}", partitionAssignedInConnector);
         }
         this.connectorConfig = new RestoreSourceConnectorConfig(map);
         if (this.amazonS3 == null) {
@@ -103,7 +101,7 @@ public class RestoreSourceTask extends SourceTask {
                 break;
             }
             ListObjectsRequest objectsPartitionReq = new ListObjectsRequest().withBucketName(connectorConfig.getBucketName()).
-                    withPrefix(connectorConfig.getTopicS3Name() + SEPARATOR + partitionAssigned[i] + SEPARATOR);
+                    withPrefix(connectorConfig.getTopicS3Name() + Constants.KEY_SEPARATOR + partitionAssigned[i] + Constants.KEY_SEPARATOR);
             ObjectListing resultPartitionReq = amazonS3.listObjects(objectsPartitionReq);
             if (resultPartitionReq != null) {
                 List<S3ObjectSummary> s3ObjectSummaries = resultPartitionReq.getObjectSummaries();
@@ -138,11 +136,6 @@ public class RestoreSourceTask extends SourceTask {
     }
 
     @Override
-    public void initialize(SourceTaskContext context) {
-        super.initialize(context);
-    }
-
-    @Override
     public List<SourceRecord> poll() throws InterruptedException {
         while (running.get()) {
             if (partitionAssigned == null || partitionAssigned.length == 0) {
@@ -166,11 +159,6 @@ public class RestoreSourceTask extends SourceTask {
     @Override
     public void stop() {
         running.set(false);
-    }
-
-    @Override
-    public void commitRecord(SourceRecord record) throws InterruptedException {
-        super.commitRecord(record);
     }
 
     private List<Header> headerList(Map<String, ByteBuffer> mapHeaders) {

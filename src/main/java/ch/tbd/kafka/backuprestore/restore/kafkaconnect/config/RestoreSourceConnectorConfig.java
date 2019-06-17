@@ -19,6 +19,7 @@ import java.util.Map;
  */
 public class RestoreSourceConnectorConfig extends AbstractBaseConnectorConfig {
     private static Logger logger = LoggerFactory.getLogger(RestoreSourceConnectorConfig.class);
+    private final String name;
 
     public static final String TOPIC_S3_NAME = "topic.name";
     private static final String TOPIC_S3_DOC = "Topic name which you want to restore. The format is topic-name-on-s3:topic-to-use-on-kafka. The topic name to use on kafka is optional." +
@@ -46,14 +47,9 @@ public class RestoreSourceConnectorConfig extends AbstractBaseConnectorConfig {
 
     protected RestoreSourceConnectorConfig(ConfigDef conf, Map<String, String> props) {
         super(conf, props);
+        this.name = parseName(originalsStrings());
         logger.info("RestoreSourceConnectorConfig(ConfigDef conf, Map<String, String> props)");
     }
-
-    @Override
-    public Object get(String key) {
-        return super.get(key);
-    }
-
 
     public static ConfigDef conf() {
         logger.info("conf()");
@@ -97,6 +93,9 @@ public class RestoreSourceConnectorConfig extends AbstractBaseConnectorConfig {
         return configDef;
     }
 
+    public String getName() {
+        return name;
+    }
 
     public String getTopicS3Name() {
         return getTopicNameByIndex(0);
@@ -116,10 +115,15 @@ public class RestoreSourceConnectorConfig extends AbstractBaseConnectorConfig {
 
     private String getTopicNameByIndex(int index) {
         String topic = getString(TOPIC_S3_NAME);
-        if (topic.indexOf(":") > -1) {
+        if (topic.indexOf(":") > -1 && topic.split(":").length > index) {
             return topic.split(":")[index];
         }
         return topic;
+    }
+
+    protected static String parseName(Map<String, String> props) {
+        String nameProp = props.get("name");
+        return nameProp != null ? nameProp : "restore-source";
     }
 
 }

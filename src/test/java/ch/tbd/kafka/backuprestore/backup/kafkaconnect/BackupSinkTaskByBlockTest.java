@@ -1,6 +1,7 @@
 package ch.tbd.kafka.backuprestore.backup.kafkaconnect;
 
 import ch.tbd.kafka.backuprestore.AbstractTest;
+import ch.tbd.kafka.backuprestore.backup.kafkaconnect.config.BackupSinkConnectorConfig;
 import ch.tbd.kafka.backuprestore.backup.storage.partitioner.DefaultPartitioner;
 import ch.tbd.kafka.backuprestore.backup.storage.partitioner.Partitioner;
 import ch.tbd.kafka.backuprestore.restore.kafkaconnect.config.RestoreSourceConnectorConfig;
@@ -20,6 +21,7 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.powermock.api.mockito.PowerMockito;
 
+import java.text.MessageFormat;
 import java.util.*;
 
 /**
@@ -46,7 +48,6 @@ public class BackupSinkTaskByBlockTest extends AbstractTest {
     protected List<String> getListPropertyFiles() {
         return Arrays.asList("/BackupSinkTaskByBlockTest.properties");
     }
-
 
     public void setUp() {
         TopicPartition TOPIC_PARTITION = new TopicPartition(getPropertiesMap().get(TOPIC_1_KEY), PARTITION);
@@ -89,7 +90,7 @@ public class BackupSinkTaskByBlockTest extends AbstractTest {
         ObjectListing objectListing = amazonS3.listObjects(objectsPartitionReq);
         List<S3ObjectSummary> s3ObjectSummaries = objectListing.getObjectSummaries();
         if (s3ObjectSummaries == null || s3ObjectSummaries.isEmpty() || s3ObjectSummaries.size() > 1) {
-            Assertions.fail(String.format("Expected object for topic {0} 0, found {1}", topicName, s3ObjectSummaries == null ? null : s3ObjectSummaries.size()));
+            Assertions.fail(MessageFormat.format("Expected object for topic {0} 0, found {1}", topicName, s3ObjectSummaries == null ? null : s3ObjectSummaries.size()));
         }
     }
 }

@@ -10,8 +10,6 @@ import com.amazonaws.services.s3.model.ObjectListing;
 import com.amazonaws.services.s3.model.S3Object;
 import com.amazonaws.services.s3.model.S3ObjectSummary;
 import com.amazonaws.util.IOUtils;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.InputStream;
 import java.nio.ByteBuffer;
@@ -21,8 +19,6 @@ import java.util.List;
 //TODO: Old class. Remove it?
 @Deprecated
 public class S3KafkaRecordReader extends AbstractKafkaRecordReader {
-
-    private static final Logger LOGGER = LoggerFactory.getLogger(S3KafkaRecordReader.class);
 
     private AmazonS3 amazonS3;
     private String bucket;

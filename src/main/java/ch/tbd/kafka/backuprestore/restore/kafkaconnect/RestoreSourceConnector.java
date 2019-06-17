@@ -8,7 +8,6 @@ import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.model.ListObjectsRequest;
 import com.amazonaws.services.s3.model.ObjectListing;
 import com.amazonaws.services.s3.model.S3ObjectSummary;
-import org.apache.kafka.common.config.Config;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.source.SourceConnector;
@@ -100,15 +99,8 @@ public class RestoreSourceConnector extends SourceConnector {
         return taskConfigs;
     }
 
-    //Validate configuration
-    @Override
-    public Config validate(Map<String, String> connectorConfigs) {
-        return super.validate(connectorConfigs);
-    }
-
     @Override
     public void stop() {
-
     }
 
     @Override
@@ -119,10 +111,5 @@ public class RestoreSourceConnector extends SourceConnector {
     @Override
     public String version() {
         return Version.getVersion();
-    }
-
-    //ONLY FOR TEST
-    public void setAmazonS3(AmazonS3 amazonS3) {
-        this.amazonS3 = amazonS3;
     }
 }

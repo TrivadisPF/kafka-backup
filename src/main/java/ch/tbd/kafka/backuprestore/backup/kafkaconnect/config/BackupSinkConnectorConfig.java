@@ -1,4 +1,4 @@
-package ch.tbd.kafka.backuprestore.backup.kafkaconnect;
+package ch.tbd.kafka.backuprestore.backup.kafkaconnect.config;
 
 import ch.tbd.kafka.backuprestore.backup.storage.CompressionType;
 import ch.tbd.kafka.backuprestore.common.kafkaconnect.AbstractBaseConnectorConfig;
@@ -37,6 +37,7 @@ public class BackupSinkConnectorConfig extends AbstractBaseConnectorConfig {
 
     public static final String S3_RETRY_BACKOFF_CONFIG = "s3.retry.backoff.ms";
     private static final int S3_RETRY_BACKOFF_DEFAULT = 200;
+    private static final String S3_RETRY_BACKOFF_DISPLAY = "Retry Backoff (ms)";
 
     public static final String HEADERS_USE_EXPECT_CONTINUE_CONFIG =
             "s3.http.send.expect.continue";
@@ -64,7 +65,7 @@ public class BackupSinkConnectorConfig extends AbstractBaseConnectorConfig {
             "The retry backoff in milliseconds. This config is used to notify Kafka connect to retry "
                     + "delivering a message batch or performing recovery in case of transient exceptions.";
     private static final long RETRY_BACKOFF_DEFAULT = 5000L;
-    private static final String RETRY_BACKOFF_DISPLAY = "Retry Backoff (ms)";
+    private static final String RETRY_BACKOFF_DISPLAY = S3_RETRY_BACKOFF_DISPLAY;
 
     private static final String FILENAME_OFFSET_ZERO_PAD_WIDTH_CONFIG =
             "filename.offset.zero.pad.width";
@@ -76,8 +77,14 @@ public class BackupSinkConnectorConfig extends AbstractBaseConnectorConfig {
     private static final String FILENAME_OFFSET_ZERO_PAD_WIDTH_DISPLAY =
             "Filename Offset Zero Pad Width";
 
-    private final String name;
+    private static final String S3_RETENTION_POLICY_CONFIG = "s3.retention.policy.days";
+    private static final String
+            S3_RETENTION_POLICY_DOC =
+            "The retention in days. It will be used to set the rules on S3 in order to clean the data inside the bucket. Default is 1 day";
+    private static final int S3_RETENTION_POLICY_DEFAULT = 1;
+    private static final String S3_RETENTION_POLICY_DISPLAY = "Retention on S3 bucket (days)";
 
+    private final String name;
 
     public BackupSinkConnectorConfig(Map<String, String> props) {
         this(conf(), props);
@@ -86,11 +93,6 @@ public class BackupSinkConnectorConfig extends AbstractBaseConnectorConfig {
     protected BackupSinkConnectorConfig(ConfigDef conf, Map<String, String> props) {
         super(conf, props);
         this.name = parseName(originalsStrings());
-    }
-
-    @Override
-    public Object get(String key) {
-        return super.get(key);
     }
 
     public String getName() {
@@ -161,7 +163,7 @@ public class BackupSinkConnectorConfig extends AbstractBaseConnectorConfig {
                 group,
                 ++orderInGroup,
                 Width.SHORT,
-                "Retry Backoff (ms)"
+                S3_RETRY_BACKOFF_DISPLAY
         );
 
         configDef.define(
@@ -227,14 +229,26 @@ public class BackupSinkConnectorConfig extends AbstractBaseConnectorConfig {
                 FILENAME_OFFSET_ZERO_PAD_WIDTH_DISPLAY
         );
 
+        configDef.define(
+                S3_RETENTION_POLICY_CONFIG,
+                Type.INT,
+                S3_RETENTION_POLICY_DEFAULT,
+                ConfigDef.Range.atLeast(0),
+                Importance.LOW,
+                S3_RETENTION_POLICY_DOC,
+                group,
+                ++orderInGroup,
+                Width.LONG,
+                S3_RETENTION_POLICY_DISPLAY
+        );
+
         return configDef;
     }
 
     protected static String parseName(Map<String, String> props) {
         String nameProp = props.get("name");
-        return nameProp != null ? nameProp : "Backup-sink";
+        return nameProp != null ? nameProp : "backup-sink";
     }
-
 
     public int getPartSize() {
         return getInt(PART_SIZE_CONFIG);
@@ -263,6 +277,10 @@ public class BackupSinkConnectorConfig extends AbstractBaseConnectorConfig {
 
     public boolean useExpectContinue() {
         return getBoolean(HEADERS_USE_EXPECT_CONTINUE_CONFIG);
+    }
+
+    public int getS3RetentionInDays() {
+        return getInt(S3_RETENTION_POLICY_CONFIG);
     }
 
     private static class PartRange implements ConfigDef.Validator {

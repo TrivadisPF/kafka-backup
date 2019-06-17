@@ -1,7 +1,7 @@
 package ch.tbd.kafka.backuprestore.backup.kafkaconnect.retention;
 
 import ch.tbd.kafka.backuprestore.AbstractTest;
-import ch.tbd.kafka.backuprestore.backup.kafkaconnect.BackupSinkConnectorConfig;
+import ch.tbd.kafka.backuprestore.backup.kafkaconnect.config.BackupSinkConnectorConfig;
 import ch.tbd.kafka.backuprestore.backup.storage.S3OutputStream;
 import ch.tbd.kafka.backuprestore.util.AmazonS3Utils;
 import com.amazonaws.services.s3.AmazonS3;
@@ -74,7 +74,7 @@ public class RetentionTest extends AbstractTest {
         DatumWriter<String> writer = null;
         DataFileWriter<String> dataFileWriter = null;
         try {
-            s3out = new S3OutputStream(this.prefix + "nameObject", conf, amazonS3);
+            s3out = new S3OutputStream(this.prefix + this.nameObject, conf, amazonS3);
             writer = new GenericDatumWriter<String>(Schema.create(Schema.Type.STRING));
             dataFileWriter = new DataFileWriter(writer);
             dataFileWriter.create(Schema.create(Schema.Type.STRING), s3out);

@@ -1,6 +1,7 @@
 package ch.tbd.kafka.backuprestore.backup.kafkaconnect;
 
 import ch.tbd.kafka.backuprestore.AbstractTest;
+import ch.tbd.kafka.backuprestore.backup.kafkaconnect.config.BackupSinkConnectorConfig;
 import ch.tbd.kafka.backuprestore.backup.storage.partitioner.DefaultPartitioner;
 import ch.tbd.kafka.backuprestore.backup.storage.partitioner.Partitioner;
 import ch.tbd.kafka.backuprestore.restore.kafkaconnect.config.RestoreSourceConnectorConfig;
@@ -22,6 +23,7 @@ import org.junit.platform.commons.logging.Logger;
 import org.junit.platform.commons.logging.LoggerFactory;
 import org.powermock.api.mockito.PowerMockito;
 
+import java.text.MessageFormat;
 import java.util.*;
 
 /**
@@ -96,8 +98,8 @@ public class BackupSinkTaskByIntervalTest extends AbstractTest {
                 withPrefix(topicName + Constants.KEY_SEPARATOR + 0 + Constants.KEY_SEPARATOR);
         ObjectListing objectListing = amazonS3.listObjects(objectsPartitionReq);
         List<S3ObjectSummary> s3ObjectSummaries = objectListing.getObjectSummaries();
-        if (s3ObjectSummaries == null || s3ObjectSummaries.isEmpty() || s3ObjectSummaries.size() > 1) {
-            Assertions.fail(String.format("Expected object for topic {0} 0, found {1}", topicName, s3ObjectSummaries == null ? null : s3ObjectSummaries.size()));
+        if (s3ObjectSummaries == null || s3ObjectSummaries.isEmpty() || s3ObjectSummaries.size() > 3) {
+            Assertions.fail(MessageFormat.format("Expected object for topic {0} 0, found {1}", topicName, s3ObjectSummaries == null ? null : s3ObjectSummaries.size()));
         }
     }
 }

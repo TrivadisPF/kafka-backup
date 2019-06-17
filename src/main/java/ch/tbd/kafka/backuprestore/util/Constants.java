@@ -9,6 +9,8 @@ package ch.tbd.kafka.backuprestore.util;
  */
 public interface Constants {
 
+    public static final int FIELD_INDEX_NAME_BACKUP = 15;
+
     public static final String KEY_SEPARATOR = "/";
 
     public static final String KEY_HEADER_RESTORED = "x-restored";
