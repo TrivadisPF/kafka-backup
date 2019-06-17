@@ -107,7 +107,7 @@ public class KafkaRecordWriterMultipartUpload implements RecordWriter {
     }
 
     private String key(SinkRecord record) {
-        return String.format("%s/%d/%s-%s.avro", record.topic(), record.kafkaPartition(), record.topic(), StringUtils.leftPad(String.valueOf(record.kafkaOffset()), 15, "0"));
+        return String.format("%s/%d/%s-%d-%s.avro", record.topic(), record.kafkaPartition(), record.topic(), record.kafkaPartition(), StringUtils.leftPad(String.valueOf(record.kafkaOffset()), 15, "0"));
     }
 
 }

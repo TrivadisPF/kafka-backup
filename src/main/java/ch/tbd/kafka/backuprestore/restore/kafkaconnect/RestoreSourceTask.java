@@ -105,31 +105,33 @@ public class RestoreSourceTask extends SourceTask {
             ListObjectsRequest objectsPartitionReq = new ListObjectsRequest().withBucketName(connectorConfig.getBucketName()).
                     withPrefix(connectorConfig.getTopicS3Name() + SEPARATOR + partitionAssigned[i] + SEPARATOR);
             ObjectListing resultPartitionReq = amazonS3.listObjects(objectsPartitionReq);
-            List<S3ObjectSummary> s3ObjectSummaries = resultPartitionReq.getObjectSummaries();
-            while (resultPartitionReq.isTruncated()) {
-                resultPartitionReq = amazonS3.listNextBatchOfObjects(resultPartitionReq);
-                s3ObjectSummaries.addAll(resultPartitionReq.getObjectSummaries());
-            }
-            Collections.sort(s3ObjectSummaries, Comparator.comparing(S3ObjectSummary::getKey));
-            Iterator<S3ObjectSummary> it = s3ObjectSummaries.iterator();
-            while (it.hasNext()) {
-                if (!hasMoreSpaceToAddRecords(sourceRecordList)) {
-                    break;
+            if (resultPartitionReq != null) {
+                List<S3ObjectSummary> s3ObjectSummaries = resultPartitionReq.getObjectSummaries();
+                while (resultPartitionReq.isTruncated()) {
+                    resultPartitionReq = amazonS3.listNextBatchOfObjects(resultPartitionReq);
+                    s3ObjectSummaries.addAll(resultPartitionReq.getObjectSummaries());
                 }
-                S3ObjectSummary s3ObjectSummary = it.next();
-                GetObjectRequest getObjectRequest = new GetObjectRequest(connectorConfig.getBucketName(), s3ObjectSummary.getKey());
-                LinkedList<KafkaRecord> kafkaRecordLinkedList = convertS3ObjectToKafkaRecords(amazonS3.getObject(getObjectRequest).getObjectContent());
-                kafkaRecordLinkedList.stream().forEach(kafkaRecord -> {
-                    if (checkValidOffsetOnKafka(kafkaRecord.getPartition(), kafkaRecord.getOffset())
-                            && checkValidOffsetS3(kafkaRecord.getPartition(), kafkaRecord.getOffset())) {
-                        Map<String, String> sourcePartition = Collections.singletonMap(TOPIC_PARTITION_FIELD, keyPartitionOffsetKafkaConnect(kafkaRecord.getPartition()));
-                        Map<String, Long> sourceOffset = Collections.singletonMap(TOPIC_POSITION_FIELD, kafkaRecord.getOffset());
-                        lastOffsetS3Read.put(kafkaRecord.getPartition(), kafkaRecord.getOffset());
-                        sourceRecordList.add(new SourceRecord(sourcePartition, sourceOffset, connectorConfig.getTopicKafkaName(),
-                                kafkaRecord.getPartition(), Schema.BYTES_SCHEMA, SerializationDataUtils.deserialize(kafkaRecord.getKey().array()),
-                                Schema.BYTES_SCHEMA, SerializationDataUtils.deserialize(kafkaRecord.getValue().array()), kafkaRecord.getTimestamp(), headerList(kafkaRecord.getHeaders())));
+                Collections.sort(s3ObjectSummaries, Comparator.comparing(S3ObjectSummary::getKey));
+                Iterator<S3ObjectSummary> it = s3ObjectSummaries.iterator();
+                while (it.hasNext()) {
+                    if (!hasMoreSpaceToAddRecords(sourceRecordList)) {
+                        break;
                     }
-                });
+                    S3ObjectSummary s3ObjectSummary = it.next();
+                    GetObjectRequest getObjectRequest = new GetObjectRequest(connectorConfig.getBucketName(), s3ObjectSummary.getKey());
+                    LinkedList<KafkaRecord> kafkaRecordLinkedList = convertS3ObjectToKafkaRecords(amazonS3.getObject(getObjectRequest).getObjectContent());
+                    kafkaRecordLinkedList.stream().forEach(kafkaRecord -> {
+                        if (checkValidOffsetOnKafka(kafkaRecord.getPartition(), kafkaRecord.getOffset())
+                                && checkValidOffsetS3(kafkaRecord.getPartition(), kafkaRecord.getOffset())) {
+                            Map<String, String> sourcePartition = Collections.singletonMap(TOPIC_PARTITION_FIELD, keyPartitionOffsetKafkaConnect(kafkaRecord.getPartition()));
+                            Map<String, Long> sourceOffset = Collections.singletonMap(TOPIC_POSITION_FIELD, kafkaRecord.getOffset());
+                            lastOffsetS3Read.put(kafkaRecord.getPartition(), kafkaRecord.getOffset());
+                            sourceRecordList.add(new SourceRecord(sourcePartition, sourceOffset, connectorConfig.getTopicKafkaName(),
+                                    kafkaRecord.getPartition(), Schema.BYTES_SCHEMA, SerializationDataUtils.deserialize(kafkaRecord.getKey().array()),
+                                    Schema.BYTES_SCHEMA, SerializationDataUtils.deserialize(kafkaRecord.getValue().array()), kafkaRecord.getTimestamp(), headerList(kafkaRecord.getHeaders())));
+                        }
+                    });
+                }
             }
         }
         return sourceRecordList;

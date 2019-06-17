@@ -20,8 +20,6 @@ import java.util.Map;
 public class RestoreSourceConnectorConfig extends AbstractBaseConnectorConfig {
     private static Logger logger = LoggerFactory.getLogger(RestoreSourceConnectorConfig.class);
 
-    public final String DEFAULT_NAME_CONNECTOR = "restore-sink";
-
     public static final String TOPIC_S3_NAME = "topic.name";
     private static final String TOPIC_S3_DOC = "Topic name which you want to restore. The format is topic-name-on-s3:topic-to-use-on-kafka. The topic name to use on kafka is optional." +
             "Example -> topic-a:topic-b The connector will restore the topic-a from S3 and store the data inside topic-b on kafka" +
