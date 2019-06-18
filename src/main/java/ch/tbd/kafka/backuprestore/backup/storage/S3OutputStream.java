@@ -1,6 +1,6 @@
 package ch.tbd.kafka.backuprestore.backup.storage;
 
-import ch.tbd.kafka.backuprestore.backup.kafkaconnect.BackupSinkConnectorConfig;
+import ch.tbd.kafka.backuprestore.backup.kafkaconnect.config.BackupSinkConnectorConfig;
 import ch.tbd.kafka.backuprestore.util.StringUtils;
 import com.amazonaws.AmazonClientException;
 import com.amazonaws.event.ProgressEvent;
@@ -75,7 +75,7 @@ public class S3OutputStream extends OutputStream {
     @Override
     public void write(byte[] b, int off, int len) throws IOException {
         if (b == null) {
-            throw new NullPointerException();
+            throw new IllegalArgumentException();
         } else if (outOfRange(off, b.length) || len < 0 || outOfRange(off + len, b.length)) {
             throw new IndexOutOfBoundsException();
         } else if (len == 0) {
@@ -109,6 +109,7 @@ public class S3OutputStream extends OutputStream {
         try {
             multiPartUpload.uploadPart(new ByteArrayInputStream(buffer.array()), size);
         } catch (Exception e) {
+            log.error(e.getMessage(), e);
             //if (multiPartUpload != null) {
             multiPartUpload.abort();
             log.debug("Multipart upload aborted for bucket '{}' key '{}'.", bucket, key);

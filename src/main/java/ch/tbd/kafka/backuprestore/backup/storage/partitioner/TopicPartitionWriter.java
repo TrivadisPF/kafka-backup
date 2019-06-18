@@ -1,6 +1,6 @@
 package ch.tbd.kafka.backuprestore.backup.storage.partitioner;
 
-import ch.tbd.kafka.backuprestore.backup.kafkaconnect.BackupSinkConnectorConfig;
+import ch.tbd.kafka.backuprestore.backup.kafkaconnect.config.BackupSinkConnectorConfig;
 import ch.tbd.kafka.backuprestore.backup.storage.format.KafkaRecordWriterMultipartUpload;
 import ch.tbd.kafka.backuprestore.backup.storage.format.RecordWriter;
 import ch.tbd.kafka.backuprestore.util.AmazonS3Utils;
@@ -71,30 +71,6 @@ public class TopicPartitionWriter {
         this.flushSize = this.connectorConfig.getFlushSize();
         rotateIntervalMs = this.connectorConfig.getRotateIntervalMs();
         timeoutMs = this.connectorConfig.getRetryBackoffDefault();
-        this.amazonS3 = AmazonS3Utils.initConnection(this.connectorConfig);
-    }
-
-    // Visible for testing
-    TopicPartitionWriter(TopicPartition tp,
-                         Partitioner<?> partitioner,
-                         BackupSinkConnectorConfig connectorConfig,
-                         SinkTaskContext context,
-                         Time time) {
-        this.connectorConfig = connectorConfig;
-        this.time = time;
-        this.tp = tp;
-        this.context = context;
-        this.partitioner = partitioner;
-        flushSize = this.connectorConfig.getFlushSize();
-        rotateIntervalMs = connectorConfig.getRotateIntervalMs();
-        timeoutMs = this.connectorConfig.getRetryBackoffDefault();
-        buffer = new LinkedList<>();
-        writers = new HashMap<>();
-        currentSchemas = new HashMap<>();
-        startOffsets = new HashMap<>();
-        state = State.WRITE_STARTED;
-        failureTime = -1L;
-        currentOffset = -1L;
         this.amazonS3 = AmazonS3Utils.initConnection(this.connectorConfig);
     }
 

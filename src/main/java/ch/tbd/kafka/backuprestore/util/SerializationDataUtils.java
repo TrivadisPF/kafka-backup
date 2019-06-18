@@ -10,12 +10,13 @@ import java.io.*;
  * @version $$Revision$$
  */
 public class SerializationDataUtils {
+    private static final int SIZE_BYTE_ARRAY = 1024;
 
     public static byte[] serialize(Object object) {
         if (object == null) {
             return null;
         } else {
-            ByteArrayOutputStream baos = new ByteArrayOutputStream(1024);
+            ByteArrayOutputStream baos = new ByteArrayOutputStream(SIZE_BYTE_ARRAY);
 
             try {
                 ObjectOutputStream oos = new ObjectOutputStream(baos);

@@ -1,6 +1,6 @@
 package ch.tbd.kafka.backuprestore.backup.storage.format;
 
-import ch.tbd.kafka.backuprestore.backup.kafkaconnect.BackupSinkConnectorConfig;
+import ch.tbd.kafka.backuprestore.backup.kafkaconnect.config.BackupSinkConnectorConfig;
 import ch.tbd.kafka.backuprestore.model.KafkaRecord;
 import ch.tbd.kafka.backuprestore.model.avro.AvroKafkaRecord;
 import com.amazonaws.ClientConfiguration;
@@ -27,6 +27,7 @@ import java.util.Map;
  * @author iorfinoa
  * @version $$Revision$$
  */
+@Deprecated
 public class KafkaRecordWriter implements RecordWriter {
 
     private LinkedList<KafkaRecord> records = new LinkedList<>();

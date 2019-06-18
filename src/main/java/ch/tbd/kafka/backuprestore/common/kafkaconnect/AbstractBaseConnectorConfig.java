@@ -1,7 +1,6 @@
 package ch.tbd.kafka.backuprestore.common.kafkaconnect;
 
 import ch.tbd.kafka.backuprestore.config.ComposableConfig;
-import com.amazonaws.auth.AWSCredentialsProvider;
 import com.amazonaws.regions.RegionUtils;
 import com.amazonaws.regions.Regions;
 import com.amazonaws.services.s3.model.CannedAccessControlList;
@@ -29,7 +28,7 @@ import java.util.*;
 public abstract class AbstractBaseConnectorConfig extends AbstractConfig implements ComposableConfig {
 
     private static Logger logger = LoggerFactory.getLogger(AbstractBaseConnectorConfig.class);
-    private static final String S3_BUCKET_CONFIG = "s3.bucket.name";
+    public static final String S3_BUCKET_CONFIG = "s3.bucket.name";
     private static final String S3_BUCKET_DOC = "The S3 Bucket.";
     private static final String S3_BUCKET_DISPLAY = "S3 Bucket";
 
@@ -60,13 +59,13 @@ public abstract class AbstractBaseConnectorConfig extends AbstractConfig impleme
     private static final String S3_PROXY_URL_DOC = "S3 Proxy settings encoded in URL syntax. This property is meant to be used only if you"
             + " need to access S3 through a proxy.";
     private static final String S3_PROXY_URL_DEFAULT = "";
-    private static final String S3_PROXY_URL_DISPLAY = "S3 Proxy Settings";
+    private static final String S3_PROXY_URL_DISPLAY = "S3 Proxy URL Settings";
 
     public static final String S3_PROXY_PORT_CONFIG = "s3.proxy.port";
     private static final String S3_PROXY_PORT_DOC = "S3 Proxy settings encoded in URL syntax. This property is meant to be used only if you"
             + " need to access S3 through a proxy.";
     private static final int S3_PROXY_PORT_DEFAULT = 0;
-    private static final String S3_PROXY_PORT_DISPLAY = "S3 Proxy Settings";
+    private static final String S3_PROXY_PORT_DISPLAY = "S3 Proxy Port Settings";
 
     public static final String S3_PROXY_USER_CONFIG = "s3.proxy.user";
     private static final String S3_PROXY_USER_DOC = "S3 Proxy User. This property is meant to be used only if you"
@@ -377,30 +376,6 @@ public abstract class AbstractBaseConnectorConfig extends AbstractConfig impleme
         public String toString() {
             return "[" + ALLOWED_VALUES + "]";
         }
-    }
-
-    private static class CredentialsProviderValidator implements ConfigDef.Validator {
-        @Override
-        public void ensureValid(String name, Object provider) {
-            if (provider != null && provider instanceof Class
-                    && AWSCredentialsProvider.class.isAssignableFrom((Class<?>) provider)) {
-                return;
-            }
-            throw new ConfigException(
-                    name,
-                    provider,
-                    "Class must extend: " + AWSCredentialsProvider.class
-            );
-        }
-
-        @Override
-        public String toString() {
-            return "Any class implementing: " + AWSCredentialsProvider.class;
-        }
-    }
-
-    protected static String parseName(Map<String, String> props) {
-        return props.get("name");
     }
 
 }
