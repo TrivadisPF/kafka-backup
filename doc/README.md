@@ -113,16 +113,20 @@ In order to keep the solution simple at the beginning, we could always start twp
 Option questions and possible solutions
 
   1. What does **Active** and **Passive** mode mean in the context of a Kafka Connector?
+    
     * we could use the **Pause** and **Resume** commands of a connector to match **Passive** and **Active** modes. A connector which is paused will no longer receive messages from the Connector. There are two corresponding methods `pause` and `resume` on the `SinkTaskContext` class (an instance of this class being available inside the connector)	
   2. How to start a backup from the beginning, if a connector was already running
+    
     * use the [`offset`](http://raovat2.champhay.com/apache/kafka/2.2.1/javadoc/org/apache/kafka/connect/sink/SinkTaskContext.html#offset-java.util.Map) method on the `SinkTaskContext` class before switching the connector back to **Active**
 
   3. Is a connector in **Passive** state able to consume a message from Kafka, assuming that the connector instance has been **Paused**?
+    
     * if this is not possible, then an option would be to implement a special Kafka Source Connector, which just reads the topic  `_compacted_log_backup_coordination` as well and executes the **Pause** and **Resume** command accordingly.
 
  		![Alt Image Text](./images/backup-log-compacted-state-coord.png "Handling Log Compacted topics")
 
   4. How do we know that we are at the end of the Topic, when we are "catching-up" in order to get the **Active** instance?
+    
     * currently the only option I see is to also consume the `__consumer_offsets` topic and filter for the connector consumer instance which is currently active. This is shown in the diagram above as well. 
 
 
