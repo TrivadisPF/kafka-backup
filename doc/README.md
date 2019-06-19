@@ -15,18 +15,18 @@ Each record from Kafka is written to the Backup serialised as an Avro Record in 
 
 ```
 {
-  "namespace": "ch.tbd.kafka.backuprestore.model.avro",
-  "type": "record",
-  "name": "AvroKafkaRecord",
-  "fields" : [
-    {"name": "topic", "type": "string"},
-    {"name": "partition", "type": "int"},
-    {"name": "offset", "type": "long"},
-    {"name": "timestamp", "type": "long"},
-    {"name": "key", "type": [ "bytes", "null" ], "default": "null" },
-    {"name": "value", "type": "bytes"},
-    {"name": "headers", "type": [ {"type": "map", "values": "bytes"}, "null" ], "default": null}
-  ]
+    "namespace": "ch.tbd.kafka.backuprestore.model.avro",
+    "type": "record",
+    "name": "AvroKafkaRecord",
+    "fields" : [
+        {"name": "topic", "type": "string"},
+        {"name": "partition", "type": "int"},
+        {"name": "offset", "type": "long"},
+        {"name": "timestamp", "type": "long"},
+        {"name": "key", "type": [ "bytes", "null" ], "default": "null" },
+        {"name": "value", "type": "bytes"},
+        {"name": "headers", "type": [ {"type": "map", "values": "bytes"}, "null" ], "default": null}
+    ]
 }
 ```
 
@@ -91,7 +91,7 @@ The following steps describe one cycle of the backup and the switch from **Activ
  2. and one instance starts in **Passive** state (grey background)
  3. the active instance starts its backup from offset 0 
  4. the backup runs until a configurable time has passed (`compacted.log.backup.length.days`)
- 5. the active instance publishes a message to topic `_compacted_log_backup_coordination` according to this Avro Schema
+ 5. the active instance publishes a message to topic `_compacted_log_backup_coordination` according to this [Avro Schema](../src/main/avro/AvroCompatedLogBackupCoordination-v1.0.avsc)
  6. the Passive instance picks up the message and changes its state to **Catch-up**
  7. clears its backup destination on S3 
  8. and (re)starts its own backup from offset 0
