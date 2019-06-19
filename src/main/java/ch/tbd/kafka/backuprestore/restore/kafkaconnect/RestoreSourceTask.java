@@ -40,6 +40,8 @@ public class RestoreSourceTask extends SourceTask {
 
     private RestoreSourceConnectorConfig connectorConfig;
     private AmazonS3 amazonS3;
+    private String s3TopicName;
+    private String kafkaTopicName;
     private int[] partitionAssigned = null;
     private Map<Integer, Long> lastOffsetCommittedOnKafka = new HashMap<>();
     private Map<Integer, Long> lastOffsetS3Read = new HashMap<>();
@@ -52,7 +54,10 @@ public class RestoreSourceTask extends SourceTask {
 
     @Override
     public void start(Map<String, String> map) {
-        String partitionAssignedInConnector = map.get(Constants.PARTITION_ASSIGNED_KEY);
+        this.kafkaTopicName = map.get(Constants.KEY_TOPIC_NAME_TASK);
+        this.s3TopicName = map.get(Constants.KEY_S3_TOPIC_NAME_TASK);
+        String partitionAssignedInConnector = map.get(Constants.KEY_PARTITION_TASK);
+
         if (partitionAssignedInConnector != null && partitionAssignedInConnector.indexOf(";") == -1) {
             //I have only one partition
             this.partitionAssigned = new int[1];
@@ -101,7 +106,7 @@ public class RestoreSourceTask extends SourceTask {
                 break;
             }
             ListObjectsRequest objectsPartitionReq = new ListObjectsRequest().withBucketName(connectorConfig.getBucketName()).
-                    withPrefix(connectorConfig.getTopicS3Name() + Constants.KEY_SEPARATOR + partitionAssigned[i] + Constants.KEY_SEPARATOR);
+                    withPrefix(s3TopicName + Constants.KEY_SEPARATOR + partitionAssigned[i] + Constants.KEY_SEPARATOR);
             ObjectListing resultPartitionReq = amazonS3.listObjects(objectsPartitionReq);
             if (resultPartitionReq != null) {
                 List<S3ObjectSummary> s3ObjectSummaries = resultPartitionReq.getObjectSummaries();
@@ -124,7 +129,7 @@ public class RestoreSourceTask extends SourceTask {
                             Map<String, String> sourcePartition = Collections.singletonMap(TOPIC_PARTITION_FIELD, keyPartitionOffsetKafkaConnect(kafkaRecord.getPartition()));
                             Map<String, Long> sourceOffset = Collections.singletonMap(TOPIC_POSITION_FIELD, kafkaRecord.getOffset());
                             lastOffsetS3Read.put(kafkaRecord.getPartition(), kafkaRecord.getOffset());
-                            sourceRecordList.add(new SourceRecord(sourcePartition, sourceOffset, connectorConfig.getTopicKafkaName(),
+                            sourceRecordList.add(new SourceRecord(sourcePartition, sourceOffset, kafkaTopicName,
                                     kafkaRecord.getPartition(), Schema.BYTES_SCHEMA, SerializationDataUtils.deserialize(kafkaRecord.getKey().array()),
                                     Schema.BYTES_SCHEMA, SerializationDataUtils.deserialize(kafkaRecord.getValue().array()), kafkaRecord.getTimestamp(), headerList(kafkaRecord.getHeaders())));
                         }
@@ -197,7 +202,7 @@ public class RestoreSourceTask extends SourceTask {
     }
 
     private String keyPartitionOffsetKafkaConnect(int partition) {
-        return this.connectorConfig.getTopicS3Name() + "-" + this.connectorConfig.getTopicKafkaName() + "-" + partition;
+        return s3TopicName + "-" + kafkaTopicName + "-" + partition;
     }
 
 }

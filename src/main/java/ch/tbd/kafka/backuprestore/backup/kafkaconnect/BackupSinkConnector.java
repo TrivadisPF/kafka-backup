@@ -14,7 +14,10 @@ import org.apache.kafka.connect.sink.SinkConnector;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 public class BackupSinkConnector extends SinkConnector {
 
@@ -36,8 +39,21 @@ public class BackupSinkConnector extends SinkConnector {
                 .withExpirationInDays(this.config.getS3RetentionInDays())
                 .withStatus(BucketLifecycleConfiguration.ENABLED);
 
-        BucketLifecycleConfiguration configuration = new BucketLifecycleConfiguration()
-                .withRules(Arrays.asList(rule1));
+        BucketLifecycleConfiguration configuration = amazonS3.getBucketLifecycleConfiguration(this.config.getBucketName());
+        List<BucketLifecycleConfiguration.Rule> rules = new ArrayList<>();
+        rules.add(rule1);
+        if (configuration != null) {
+            if (configuration.getRules() != null) {
+                for (BucketLifecycleConfiguration.Rule ruleTmp : configuration.getRules()) {
+                    if (!ruleTmp.getId().equalsIgnoreCase(idRule)) {
+                        rules.add(ruleTmp);
+                    }
+                }
+            }
+        } else {
+            configuration = new BucketLifecycleConfiguration();
+        }
+        configuration.setRules(rules);
         amazonS3.setBucketLifecycleConfiguration(this.config.getBucketName(), configuration);
 
         logger.info("Starting backup sink connector {}", config.getName());

@@ -65,7 +65,7 @@ curl -X PUT http://localhost:8084/connectors/source-restore/config \
      	"s3.proxy.url": "TBD", 
      	"s3.bucket.name":"TBD", 
      	"s3.proxy.port": "TBD", 
-     	"topic.name":"test-topic"
+     	"topics":"test-topic"
      	}'
 ```
 
@@ -82,8 +82,24 @@ curl -X PUT http://localhost:8084/connectors/source-restore/config \
         "s3.proxy.url": "TBD", 
         "s3.bucket.name":"TBD", 
         "s3.proxy.port": "TBD", 
-        "topic.name":"test-topic:new-topic"}'
+        "topics":"test-topic:new-topic"}'
 ```
 
+
+```
+curl -X PUT http://localhost:8084/connectors/source-restore/config \
+     -H 'Content-Type: application/json' \
+     -H 'Accept: application/json' \
+     --data '{
+        "connector.class": "ch.tbd.kafka.backuprestore.restore.kafkaconnect.RestoreSourceConnector", 
+        "tasks.max":"1", 
+        "s3.region":"eu-central-1", 
+        "value.converter": "org.apache.kafka.connect.converters.ByteArrayConverter", 
+        "key.converter":"org.apache.kafka.connect.converters.ByteArrayConverter", 
+        "s3.proxy.url": "TBD", 
+        "s3.bucket.name":"TBD", 
+        "s3.proxy.port": "TBD", 
+        "topics":"test-topic:new-topic,test-topic1:new-topic1,test-topic2:new-topic2"}'
+```
 
 
