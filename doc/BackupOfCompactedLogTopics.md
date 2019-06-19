@@ -52,4 +52,4 @@ Option questions and possible solutions
     
      * currently the best option I see is to also consume the `__consumer_offsets` topic and filter for the connector consumer instance which is currently active. This is shown in the diagram above as well
      * another option to wait until the timestamp is "near" the now is not feasible, if we have topics with rather low-volume messaging and we haven't gotten a new message for a long time
-     * the first idea to pass the offset of the **Active** instance in the **ACTIVATE** message does not work as the **Active** instance does not stop the backup, it only stops it once the **Passive** has been able to catch up to the end and not to the time when the switch over has been started. 
+     * the first idea to pass the current offset of the **Active** instance (how far did it backup) in the **ACTIVATE** message does not work as the **Active** instance does not stop the backup, it only stops it once the **Passive** has been able to catch up to the end and not to the time when the switch over has been started. 
