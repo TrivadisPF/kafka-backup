@@ -77,7 +77,7 @@ If a topic is a so-called "compacted log" topic, then data is deleted based on k
 
 In such a case we cannot remove data in the same way as for the size- and time-based topics.
 
-[Issue #30](https://github.com/TrivadisPF/kafka-backup/issues/30) describes two possible issues we discussed. Read more about the specifics under [Backup of Compacted Log Topics](./Backup of Compacted Log Topics.md).
+[Issue #30](https://github.com/TrivadisPF/kafka-backup/issues/30) describes two possible issues we discussed. Read more about the specifics under [Backup of Compacted Log Topics](BackupOfCompactedLogTopics.md).
 
 
 # Restore
