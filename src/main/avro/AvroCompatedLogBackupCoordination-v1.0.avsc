@@ -1,0 +1,11 @@
+{
+    "namespace": "ch.tbd.kafka.backuprestore.model.avro",
+    "type": "record",
+    "name": "AvroCompactedLogBackupCoordination",
+    "fields" : [
+        {"name": "event", "type": "enum", "symbols": "ACTIVATE, PASSIVATE"},
+        {"name": "connectorInstanceName", "type": "string"},
+        {"name": "topic", "type": "string"},
+        {"name": "timestamp", "type": "long"}        
+    ]
+}
