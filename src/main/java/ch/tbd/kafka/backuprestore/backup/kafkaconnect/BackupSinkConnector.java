@@ -27,34 +27,45 @@ public class BackupSinkConnector extends SinkConnector {
     @Override
     public void start(Map<String, String> map) {
         config = new BackupSinkConnectorConfig(map);
-        String topic = String.valueOf(map.get("topics"));
+        List<String> topics = new ArrayList<>();
 
-        String prefix = topic + Constants.KEY_SEPARATOR;
-        String idRule = this.config.getName() + "-rule-" + topic;
+        String confTopic = String.valueOf(map.get(TOPICS_CONFIG));
+        if (confTopic.contains(",")) {
+            String[] array = confTopic.split(",");
+            for (String topicTmp : array) {
+                topics.add(topicTmp);
+            }
+        }
 
         AmazonS3 amazonS3 = AmazonS3Utils.initConnection(this.config);
-        BucketLifecycleConfiguration.Rule rule1 = new BucketLifecycleConfiguration.Rule()
-                .withId(idRule)
-                .withFilter(new LifecycleFilter((new LifecyclePrefixPredicate(prefix))))
-                .withExpirationInDays(this.config.getS3RetentionInDays())
-                .withStatus(BucketLifecycleConfiguration.ENABLED);
 
-        BucketLifecycleConfiguration configuration = amazonS3.getBucketLifecycleConfiguration(this.config.getBucketName());
-        List<BucketLifecycleConfiguration.Rule> rules = new ArrayList<>();
-        rules.add(rule1);
-        if (configuration != null) {
-            if (configuration.getRules() != null) {
-                for (BucketLifecycleConfiguration.Rule ruleTmp : configuration.getRules()) {
-                    if (!ruleTmp.getId().equalsIgnoreCase(idRule)) {
-                        rules.add(ruleTmp);
+        for (String topic : topics) {
+            List<BucketLifecycleConfiguration.Rule> rules = new ArrayList<>();
+            String prefix = topic + Constants.KEY_SEPARATOR;
+            String idRule = this.config.getName() + "-rule-" + topic;
+
+            BucketLifecycleConfiguration.Rule rule1 = new BucketLifecycleConfiguration.Rule()
+                    .withId(idRule)
+                    .withFilter(new LifecycleFilter((new LifecyclePrefixPredicate(prefix))))
+                    .withExpirationInDays(this.config.getS3RetentionInDays())
+                    .withStatus(BucketLifecycleConfiguration.ENABLED);
+
+            BucketLifecycleConfiguration configuration = amazonS3.getBucketLifecycleConfiguration(this.config.getBucketName());
+            rules.add(rule1);
+            if (configuration != null) {
+                if (configuration.getRules() != null) {
+                    for (BucketLifecycleConfiguration.Rule ruleTmp : configuration.getRules()) {
+                        if (!ruleTmp.getId().equalsIgnoreCase(idRule)) {
+                            rules.add(ruleTmp);
+                        }
                     }
                 }
+            } else {
+                configuration = new BucketLifecycleConfiguration();
             }
-        } else {
-            configuration = new BucketLifecycleConfiguration();
+            configuration.setRules(rules);
+            amazonS3.setBucketLifecycleConfiguration(this.config.getBucketName(), configuration);
         }
-        configuration.setRules(rules);
-        amazonS3.setBucketLifecycleConfiguration(this.config.getBucketName(), configuration);
 
         logger.info("Starting backup sink connector {}", config.getName());
     }
