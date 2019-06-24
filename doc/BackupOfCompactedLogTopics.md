@@ -58,4 +58,8 @@ Option questions and possible solutions
   5. Should we send the offset instead of trying to find out the end of the topic (see 4) ?   
      * we could expand the **ACTIVATE** message ([Avro Schema](../src/main/avro/AvroCompatedLogBackupCoordination-v1.0.avsc)) to pass the offset as well as the partition number, once the time is off and a switch should happen. The Kafka connect backup task would have to cache the latest offset per partition, otherwise there is no point of knowing the offset for a partition, if the current message set received in the Task does not contain any message for that partition.      
      * if we pass the current offset and partition of the **Active** instance (how far did it backup) in the **ACTIVATE** message then we can catch-up until this offset and then inform the still **Active** instance to stop it's backup by sending the **PASSIVATE** message. The problem with that solution is, that with a high-volume topic, we will stop the **Active** instance before we have really caught-up with the **Passive** instance, which means that there is a potential data loss between the time of stopping the **Active** and the new **Active** arriving at the end of the topic (and his backup is really up-to-date).
+   
+  6. What happens in case of a rebalance in the middle of the backup?
+     * should be fine as long as we handle the `close()` and `open()` methods of the [`KafkaSinkTask`](http://raovat2.champhay.com/apache/kafka/2.2.1/javadoc/index.html?org/apache/kafka/connect/sink/SinkTaskContext.html) properly
+
  
