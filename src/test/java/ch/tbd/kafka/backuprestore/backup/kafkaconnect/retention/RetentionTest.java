@@ -19,6 +19,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
@@ -54,17 +55,31 @@ public class RetentionTest extends AbstractTest {
 
     @Test
     public void uploadFile() {
-        BucketLifecycleConfiguration.Rule rule1 = new BucketLifecycleConfiguration.Rule()
-                .withId("id-test-rule")
+        String idRule = "id-test-rule";
+        BucketLifecycleConfiguration.Rule rule = new BucketLifecycleConfiguration.Rule()
+                .withId(idRule)
                 .withFilter(new LifecycleFilter((new LifecyclePrefixPredicate(this.prefix))))
                 .withExpirationInDays(1)
                 .withStatus(BucketLifecycleConfiguration.ENABLED);
 
-        BucketLifecycleConfiguration configuration = new BucketLifecycleConfiguration()
-                .withRules(Arrays.asList(rule1));
+        BucketLifecycleConfiguration configuration = amazonS3.getBucketLifecycleConfiguration(getBucketName());
+        if (configuration == null) {
+            configuration = new BucketLifecycleConfiguration();
+        }
+        List<BucketLifecycleConfiguration.Rule> rules = new ArrayList<>();
+        rules.add(rule);
+        if (configuration.getRules() != null) {
+            for (BucketLifecycleConfiguration.Rule ruleTmp : configuration.getRules()) {
+                if (!ruleTmp.getId().equalsIgnoreCase(idRule)) {
+                    rules.add(ruleTmp);
+                }
+            }
+        }
+        configuration.setRules(rules);
 
         amazonS3.setBucketLifecycleConfiguration(getBucketName(), configuration);
         BucketLifecycleConfiguration bucketLifecycleConfiguration = amazonS3.getBucketLifecycleConfiguration(getBucketName());
+        Assertions.assertEquals(rules.size(), bucketLifecycleConfiguration.getRules().size());
         if (bucketLifecycleConfiguration == null || bucketLifecycleConfiguration.getRules() == null
                 || bucketLifecycleConfiguration.getRules().isEmpty() || bucketLifecycleConfiguration.getRules().size() > 1) {
             Assertions.fail("Configuration found is not expected");

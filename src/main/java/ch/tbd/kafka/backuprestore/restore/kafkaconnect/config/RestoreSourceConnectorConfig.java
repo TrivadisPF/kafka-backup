@@ -1,6 +1,7 @@
 package ch.tbd.kafka.backuprestore.restore.kafkaconnect.config;
 
 import ch.tbd.kafka.backuprestore.common.kafkaconnect.AbstractBaseConnectorConfig;
+import ch.tbd.kafka.backuprestore.model.RestoreTopicName;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
@@ -8,6 +9,8 @@ import org.apache.kafka.common.config.ConfigDef.Width;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -21,11 +24,13 @@ public class RestoreSourceConnectorConfig extends AbstractBaseConnectorConfig {
     private static Logger logger = LoggerFactory.getLogger(RestoreSourceConnectorConfig.class);
     private final String name;
 
-    public static final String TOPIC_S3_NAME = "topic.name";
-    private static final String TOPIC_S3_DOC = "Topic name which you want to restore. The format is topic-name-on-s3:topic-to-use-on-kafka. The topic name to use on kafka is optional." +
+    public static final String TOPIC_S3_NAME = "topics";
+    private static final String TOPIC_S3_DOC = "Topics names which you want to restore. The format is topic-name-on-s3:topic-to-use-on-kafka." +
+            "Please use the ',' character to separate each topic which you want to restore. The topic name to use on kafka is optional." +
+            "Example -> topic-a:topic-b,topic-c:topic-d The connector will restore the topic-a from S3 and store the data inside topic-b on kafka and the topic-c in topic-d" +
             "Example -> topic-a:topic-b The connector will restore the topic-a from S3 and store the data inside topic-b on kafka" +
             "Example -> topic-a The connector will restore the topic-a from S3 and store the data inside topic-a on kafka";
-    private static final String TOPIC_S3_DISPLAY = "Topic name to restore";
+    private static final String TOPIC_S3_DISPLAY = "Topics names to restore";
 
 
     public static final String POLL_INTERVAL_MS_CONFIG = "poll.interval.ms";
@@ -60,12 +65,12 @@ public class RestoreSourceConnectorConfig extends AbstractBaseConnectorConfig {
 
         configDef.define(
                 TOPIC_S3_NAME,
-                ConfigDef.Type.STRING,
+                Type.LIST,
                 Importance.HIGH,
                 TOPIC_S3_DOC,
                 group,
                 ++orderInGroup,
-                Width.LONG,
+                Width.SHORT,
                 TOPIC_S3_DISPLAY);
 
         configDef.define(
@@ -97,14 +102,6 @@ public class RestoreSourceConnectorConfig extends AbstractBaseConnectorConfig {
         return name;
     }
 
-    public String getTopicS3Name() {
-        return getTopicNameByIndex(0);
-    }
-
-    public String getTopicKafkaName() {
-        return getTopicNameByIndex(1);
-    }
-
     public int getPollIntervalMsConfig() {
         return getInt(POLL_INTERVAL_MS_CONFIG);
     }
@@ -113,12 +110,20 @@ public class RestoreSourceConnectorConfig extends AbstractBaseConnectorConfig {
         return getInt(BATCH_MAX_RECORDS_CONFIG);
     }
 
-    private String getTopicNameByIndex(int index) {
-        String topic = getString(TOPIC_S3_NAME);
-        if (topic.indexOf(":") > -1 && topic.split(":").length > index) {
-            return topic.split(":")[index];
+    public List<RestoreTopicName> getTopicName() {
+        List<String> topicsList = getList(TOPIC_S3_NAME);
+        List<RestoreTopicName> restoreTopicNameList = new ArrayList<>();
+        for (String topic : topicsList) {
+            restoreTopicNameList.add(new RestoreTopicName(getTopicNameByIndex(topic, 0), getTopicNameByIndex(topic, 1)));
         }
-        return topic;
+        return restoreTopicNameList;
+    }
+
+    private String getTopicNameByIndex(String topicName, int index) {
+        if (topicName!=null && topicName.indexOf(":") > -1 && topicName.split(":").length > index) {
+            return topicName.split(":")[index];
+        }
+        return topicName;
     }
 
     protected static String parseName(Map<String, String> props) {

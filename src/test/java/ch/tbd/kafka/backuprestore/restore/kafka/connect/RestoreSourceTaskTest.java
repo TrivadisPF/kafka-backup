@@ -133,7 +133,7 @@ public class RestoreSourceTaskTest extends AbstractTest {
         if (topicNameKafka != null) {
             addProperty(RestoreSourceConnectorConfig.TOPIC_S3_NAME, getPropertiesMap().get(RestoreSourceConnectorConfig.TOPIC_S3_NAME) + ":" + topicNameKafka);
         }
-        addProperty(Constants.PARTITION_ASSIGNED_KEY, "0");
+        addProperty(Constants.KEY_PARTITION_TASK, "0");
         restoreSourceTask.start(getPropertiesMap());
     }
 
