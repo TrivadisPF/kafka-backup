@@ -48,9 +48,10 @@ Option questions and possible solutions
 
  		![Alt Image Text](./images/backup-log-compacted-state-coord.png "Handling Log Compacted topics")
 
-  4. How do we know that we are at the end of the Topic, when we are "catching-up" in order to get the **Active** instance?
+  4. How do we know inside the **Passive** instance that we are at the end of the Topic, when we are "catching-up" so that we can inform the **Active** instance to **PASSIVATE**?
     
-     * currently the best option I see is to also consume the `__consumer_offsets` topic and filter for the connector consumer instance which is currently active. This is shown in the diagram above as well. This solution although is quite resource intensive!
+     * one option would be to also consume from the `__consumer_offsets` topic and filter for the connector consumer instance which is currently active. This is shown in the diagram above as well. This solution although is quite resource intensive!
+     * the better option might be to use the Kafka `AdminClient` and the method [`listConsumerGroups`](https://kafka.apache.org/20/javadoc/org/apache/kafka/clients/admin/AdminClient.html#listConsumerGroupOffsets-java.lang.String-) to get a list of offsets for the given consumer group. 
      * another option to wait until the timestamp is "near" the now is not feasible, if we have topics with rather low-volume messaging and we haven't gotten a new message for a long time
      * if we get the offset until where to catch-up from the **Active** instance with the **ACTIVATE** instance, then we will only catch-up until this offset, while the **Active** backup has already progressed (assuming that there is traffic on the topic). See also 5).  
 
