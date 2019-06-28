@@ -48,8 +48,18 @@ Option questions and possible solutions
 
  		![Alt Image Text](./images/backup-log-compacted-state-coord.png "Handling Log Compacted topics")
 
-  4. How do we know that we are at the end of the Topic, when we are "catching-up" in order to get the **Active** instance?
+  4. How do we know inside the **Passive** instance that we are at the end of the Topic, when we are "catching-up" so that we can inform the **Active** instance to **PASSIVATE**?
     
-     * currently the best option I see is to also consume the `__consumer_offsets` topic and filter for the connector consumer instance which is currently active. This is shown in the diagram above as well
+     * one option would be to also consume from the `__consumer_offsets` topic and filter for the connector consumer instance which is currently active. This is shown in the diagram above as well. This solution although is quite resource intensive!
+     * the better option might be to use the Kafka `AdminClient` and the method [`listConsumerGroups`](https://kafka.apache.org/20/javadoc/org/apache/kafka/clients/admin/AdminClient.html#listConsumerGroupOffsets-java.lang.String-) to get a list of offsets for the given consumer group. 
      * another option to wait until the timestamp is "near" the now is not feasible, if we have topics with rather low-volume messaging and we haven't gotten a new message for a long time
-     * the first idea to pass the current offset of the **Active** instance (how far did it backup) in the **ACTIVATE** message does not work as the **Active** instance does not stop the backup, it only stops it once the **Passive** has been able to catch up to the end and not to the time when the switch over has been started. 
+     * if we get the offset until where to catch-up from the **Active** instance with the **ACTIVATE** instance, then we will only catch-up until this offset, while the **Active** backup has already progressed (assuming that there is traffic on the topic). See also 5).  
+
+  5. Should we send the offset instead of trying to find out the end of the topic (see 4) ?   
+     * we could expand the **ACTIVATE** message ([Avro Schema](../src/main/avro/AvroCompatedLogBackupCoordination-v1.0.avsc)) to pass the offset as well as the partition number, once the time is off and a switch should happen. The Kafka connect backup task would have to cache the latest offset per partition, otherwise there is no point of knowing the offset for a partition, if the current message set received in the Task does not contain any message for that partition.      
+     * if we pass the current offset and partition of the **Active** instance (how far did it backup) in the **ACTIVATE** message then we can catch-up until this offset and then inform the still **Active** instance to stop it's backup by sending the **PASSIVATE** message. The problem with that solution is, that with a high-volume topic, we will stop the **Active** instance before we have really caught-up with the **Passive** instance, which means that there is a potential data loss between the time of stopping the **Active** and the new **Active** arriving at the end of the topic (and his backup is really up-to-date).
+   
+  6. What happens in case of a rebalance in the middle of the backup?
+     * should be fine as long as we handle the `close()` and `open()` methods of the [`KafkaSinkTask`](http://raovat2.champhay.com/apache/kafka/2.2.1/javadoc/index.html?org/apache/kafka/connect/sink/SinkTaskContext.html) properly
+
+ 
