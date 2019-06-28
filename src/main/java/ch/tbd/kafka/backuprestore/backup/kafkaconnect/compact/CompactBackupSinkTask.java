@@ -421,10 +421,7 @@ public class CompactBackupSinkTask extends SinkTask {
         props.put("schema.registry.url", "http://schema-registry:8081");
         props.put("auto.offset.reset", "earliest");
         props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false);
-        //props.put(ProducerConfig.CLIENT_ID_CONFIG, CLIENT_ID);
-        //props.put(SaslConfigs.SASL_JAAS_CONFIG, "org.apache.kafka.common.security.plain.PlainLoginModule required username=\"s-sauron-isvc\" password=\"Y0ush4lln0tp4ss\";");
-        //props.put(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, "c:/work/security/kafka/isvcm-client-truststore.jks");
-        //props.put(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, "changeit");
+       
 
         props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteBufferDeserializer.class);
@@ -438,9 +435,7 @@ public class CompactBackupSinkTask extends SinkTask {
         props.put(SaslConfigs.SASL_MECHANISM, "PLAIN");
         props.put(ProducerConfig.CLIENT_ID_CONFIG, this.connectorConfig.getName());
         props.put("schema.registry.url", "http://schema-registry:8081");
-        //props.put(SaslConfigs.SASL_JAAS_CONFIG, "org.apache.kafka.common.security.plain.PlainLoginModule required username=\"s-sauron-isvc\" password=\"Y0ush4lln0tp4ss\";");
-        //props.put(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, "c:/work/security/kafka/isvcm-client-truststore.jks");
-        //props.put(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, "changeit");
+        
 
         props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
         props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteBufferSerializer.class);
