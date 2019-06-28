@@ -9,6 +9,7 @@ import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.config.ConfigDef.Width;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.connect.sink.SinkTask;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -99,11 +100,41 @@ public class BackupSinkConnectorConfig extends AbstractBaseConnectorConfig {
         return name;
     }
 
+    public String getTopics() {
+        return getString(SinkTask.TOPICS_CONFIG);
+    }
+
+    public List<String> getTopicsList() {
+        List<String> topics = new ArrayList<>();
+        String confTopic = getString(SinkTask.TOPICS_CONFIG);
+        if (confTopic.contains(",")) {
+            String[] array = confTopic.split(",");
+            for (String topicTmp : array) {
+                topics.add(topicTmp);
+            }
+        } else {
+            topics.add(getTopics());
+        }
+        return topics;
+    }
+
     public static ConfigDef conf() {
         final String group = "backup-s3";
         int orderInGroup = 0;
 
         ConfigDef configDef = AbstractBaseConnectorConfig.conf();
+
+        configDef.define(
+                SinkTask.TOPICS_CONFIG,
+                Type.STRING,
+                ConfigDef.NO_DEFAULT_VALUE,
+                Importance.HIGH,
+                "",
+                group,
+                ++orderInGroup,
+                Width.LONG,
+                ""
+        );
 
         configDef.define(
                 PART_SIZE_CONFIG,

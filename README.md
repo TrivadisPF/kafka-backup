@@ -30,7 +30,7 @@ How:
 
 The documentation is available [here](doc/README.md).
 
-### Starting the Backupt
+### Starting the Backup
 
 ```
 curl -X PUT http://localhost:8084/connectors/backup/config \
@@ -48,6 +48,43 @@ curl -X PUT http://localhost:8084/connectors/backup/config \
 	     "s3.proxy.port": "TBD",
 	     "tasks.max":"1"
      }'
+```
+
+#####Compacted Topic
+
+```
+
+curl -X PUT http://localhost:8084/connectors/backup-activate/config 
+     -H 'Content-Type: application/json' 
+     -H 'Accept: application/json' 
+     --data '{
+        "connector.class":"ch.tbd.kafka.backuprestore.backup.kafkaconnect.compact.CompactBackupSinkConnector", 
+        "value.converter": "org.apache.kafka.connect.converters.ByteArrayConverter", 
+        "key.converter": "org.apache.kafka.connect.converters.ByteArrayConverter", 
+        "topics": "test-topic", 
+        "flush.size": "3", 
+        "s3.bucket.name": "TBD", 
+        "s3.region": "TBD", 
+        "s3.proxy.url": "TBD", 
+        "s3.proxy.port": "TBD", 
+        "compacted.log.backup.initial.status":"ACTIVATE", 
+        "tasks.max":"1"}'
+
+curl -X PUT http://localhost:8084/connectors/backup-passivate/config 
+     -H 'Content-Type: application/json' 
+     -H 'Accept: application/json' 
+     --data '{
+        "connector.class":"ch.tbd.kafka.backuprestore.backup.kafkaconnect.compact.CompactBackupSinkConnector", 
+        "value.converter": "org.apache.kafka.connect.converters.ByteArrayConverter", 
+        "key.converter": "org.apache.kafka.connect.converters.ByteArrayConverter", 
+        "topics": "test-topic", 
+        "flush.size": "3", 
+        "s3.bucket.name": "TBD", 
+        "s3.region": "TBD", 
+        "s3.proxy.url": "TBD", 
+        "s3.proxy.port": "TBD", 
+        "compacted.log.backup.initial.status":"PASSIVATE", 
+        "tasks.max":"1"}'
 ```
 
 ### Starting a Restore 
