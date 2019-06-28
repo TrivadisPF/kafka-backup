@@ -1,5 +1,6 @@
 package ch.tbd.kafka.backuprestore.backup.storage.format;
 
+import ch.tbd.kafka.backuprestore.backup.kafkaconnect.compact.config.CompactBackupSinkConnectorConfig;
 import ch.tbd.kafka.backuprestore.backup.kafkaconnect.config.BackupSinkConnectorConfig;
 import ch.tbd.kafka.backuprestore.backup.storage.S3OutputStream;
 import ch.tbd.kafka.backuprestore.model.avro.AvroKafkaRecord;
@@ -108,9 +109,16 @@ public class KafkaRecordWriterMultipartUpload implements RecordWriter {
     }
 
     private String key(SinkRecord record) {
-        return String.format("%s/%d/%s-%d-%s.avro", record.topic(), record.kafkaPartition(),
-                record.topic(), record.kafkaPartition(), StringUtils.leftPad(String.valueOf(record.kafkaOffset()),
-                        Constants.FIELD_INDEX_NAME_BACKUP, "0"));
+        if (conf instanceof CompactBackupSinkConnectorConfig) {
+            //manage compacted log
+            return String.format("%s/%s/%d/%s-%d-%s.avro", record.topic(), this.conf.getName(), record.kafkaPartition(),
+                    record.topic(), record.kafkaPartition(), StringUtils.leftPad(String.valueOf(record.kafkaOffset()),
+                            Constants.FIELD_INDEX_NAME_BACKUP, "0"));
+        } else {
+            return String.format("%s/%d/%s-%d-%s.avro", record.topic(), record.kafkaPartition(),
+                    record.topic(), record.kafkaPartition(), StringUtils.leftPad(String.valueOf(record.kafkaOffset()),
+                            Constants.FIELD_INDEX_NAME_BACKUP, "0"));
+        }
     }
 
 }
