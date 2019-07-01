@@ -105,8 +105,14 @@ public class RestoreSourceTask extends SourceTask {
             if (!hasMoreSpaceToAddRecords(sourceRecordList)) {
                 break;
             }
-            ListObjectsRequest objectsPartitionReq = new ListObjectsRequest().withBucketName(connectorConfig.getBucketName()).
-                    withPrefix(s3TopicName + Constants.KEY_SEPARATOR + partitionAssigned[i] + Constants.KEY_SEPARATOR);
+            ListObjectsRequest objectsPartitionReq = null;
+            if (this.connectorConfig.isInstanceNameToRestoreConfigDefined()) {
+                objectsPartitionReq = new ListObjectsRequest().withBucketName(connectorConfig.getBucketName()).
+                        withPrefix(s3TopicName + Constants.S3_KEY_SEPARATOR + this.connectorConfig.getInstanceNameToRestoreConfig() + Constants.S3_KEY_SEPARATOR + partitionAssigned[i] + Constants.S3_KEY_SEPARATOR);
+            } else {
+                objectsPartitionReq = new ListObjectsRequest().withBucketName(connectorConfig.getBucketName()).
+                        withPrefix(s3TopicName + Constants.S3_KEY_SEPARATOR + partitionAssigned[i] + Constants.S3_KEY_SEPARATOR);
+            }
             ObjectListing resultPartitionReq = amazonS3.listObjects(objectsPartitionReq);
             if (resultPartitionReq != null) {
                 List<S3ObjectSummary> s3ObjectSummaries = resultPartitionReq.getObjectSummaries();
@@ -124,7 +130,8 @@ public class RestoreSourceTask extends SourceTask {
                     GetObjectRequest getObjectRequest = new GetObjectRequest(connectorConfig.getBucketName(), s3ObjectSummary.getKey());
                     LinkedList<KafkaRecord> kafkaRecordLinkedList = convertS3ObjectToKafkaRecords(amazonS3.getObject(getObjectRequest).getObjectContent());
                     kafkaRecordLinkedList.stream().forEach(kafkaRecord -> {
-                        if (checkValidOffsetOnKafka(kafkaRecord.getPartition(), kafkaRecord.getOffset())
+                        if (hasMoreSpaceToAddRecords(sourceRecordList)
+                                && checkValidOffsetOnKafka(kafkaRecord.getPartition(), kafkaRecord.getOffset())
                                 && checkValidOffsetS3(kafkaRecord.getPartition(), kafkaRecord.getOffset())) {
                             Map<String, String> sourcePartition = Collections.singletonMap(TOPIC_PARTITION_FIELD, keyPartitionOffsetKafkaConnect(kafkaRecord.getPartition()));
                             Map<String, Long> sourceOffset = Collections.singletonMap(TOPIC_POSITION_FIELD, kafkaRecord.getOffset());

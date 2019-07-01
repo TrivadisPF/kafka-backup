@@ -86,7 +86,7 @@ public class BackupSinkTaskByBlockTest extends AbstractTest {
         RestoreSourceConnectorConfig restoreSourceConnectorConfig = new RestoreSourceConnectorConfig(getPropertiesMap());
         AmazonS3 amazonS3 = AmazonS3Utils.initConnection(restoreSourceConnectorConfig);
         ListObjectsRequest objectsPartitionReq = new ListObjectsRequest().withBucketName(getBucketName()).
-                withPrefix(topicName + Constants.KEY_SEPARATOR + 0 + Constants.KEY_SEPARATOR);
+                withPrefix(topicName + Constants.S3_KEY_SEPARATOR + 0 + Constants.S3_KEY_SEPARATOR);
         ObjectListing objectListing = amazonS3.listObjects(objectsPartitionReq);
         List<S3ObjectSummary> s3ObjectSummaries = objectListing.getObjectSummaries();
         if (s3ObjectSummaries == null || s3ObjectSummaries.isEmpty() || s3ObjectSummaries.size() > 1) {

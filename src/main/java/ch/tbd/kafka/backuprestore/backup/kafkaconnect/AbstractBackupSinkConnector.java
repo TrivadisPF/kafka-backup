@@ -43,10 +43,10 @@ public abstract class AbstractBackupSinkConnector extends SinkConnector {
             idRuleRetentionRuleId.append("-rule-");
             idRuleRetentionRuleId.append(topic);
             StringBuilder prefixRuleId = new StringBuilder(topic);
-            prefixRuleId.append(Constants.KEY_SEPARATOR);
+            prefixRuleId.append(Constants.S3_KEY_SEPARATOR);
             if (config instanceof CompactBackupSinkConnectorConfig) {
                 prefixRuleId.append(config.getName());
-                prefixRuleId.append(Constants.KEY_SEPARATOR);
+                prefixRuleId.append(Constants.S3_KEY_SEPARATOR);
             }
             List<BucketLifecycleConfiguration.Rule> rules = new ArrayList<>();
 

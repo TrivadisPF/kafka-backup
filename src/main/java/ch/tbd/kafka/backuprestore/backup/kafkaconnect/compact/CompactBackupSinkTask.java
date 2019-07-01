@@ -33,7 +33,6 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.text.MessageFormat;
-import java.text.SimpleDateFormat;
 import java.time.Duration;
 import java.util.*;
 
@@ -110,11 +109,6 @@ public class CompactBackupSinkTask extends SinkTask {
         if (this.amazonS3 == null) {
             this.amazonS3 = AmazonS3Utils.initConnection(this.connectorConfig);
         }
-        /*
-        if (this.kafkaConsumer == null) {
-            this.kafkaConsumer = createConsumer();
-        }
-        */
         if (this.kafkaProducer == null) {
             this.kafkaProducer = createProducer();
         }
@@ -237,34 +231,6 @@ public class CompactBackupSinkTask extends SinkTask {
                         }
                     }
             }
-
-
-
-            /*
-            switch (this.stateConnector) {
-                case ACTIVATE:
-
-                    if (elapsedInterval()) {
-                        TopicPartition tmp = new TopicPartition(topic, partition);
-                        if (this.mapCoordinationTopic.containsKey(tmp)) {
-                            if (this.mapCoordinationTopic.get(tmp) < partition) {
-                                this.mapCoordinationTopic.put(tmp, offset);
-                            }
-                        } else {
-                            this.mapCoordinationTopic.put(tmp, offset);
-                        }
-                    }
-                    topicPartitionWriters.get(tp).buffer(record);
-                    break;
-                case PASSIVATE:
-                    if (elapsedInterval()) {
-
-                    } else {
-                        logger.info("Connector {} Task {} is not in active status", this.connectorConfig.getName(), Thread.currentThread().getName());
-                    }
-            }
-            */
-
         }
         if (this.status.equals(StatusConnector.WAITING)) {
             try {
@@ -273,31 +239,6 @@ public class CompactBackupSinkTask extends SinkTask {
                 logger.error(e.getMessage(), e);
             }
         }
-        /*
-        if (!this.coordinationDataWritten && this.stateConnector.equals(EnumType.ACTIVATE) && elapsedInterval()) {
-            Iterator<TopicPartition> it = this.mapCoordinationTopic.keySet().iterator();
-            while (it.hasNext()) {
-                TopicPartition partition = it.next();
-                long offset = this.mapCoordinationTopic.get(partition);
-                storeDataCoordinateTopic(partition, offset, EnumType.ACTIVATE);
-            }
-            Iterator<TopicPartition> itAssignment = this.assignment.iterator();
-            int countLatestOffsetStored = 0;
-            while (itAssignment.hasNext()) {
-                TopicPartition topicPartition = itAssignment.next();
-                if (this.mapCoordinationTopic.containsKey(topicPartition)) {
-                    countLatestOffsetStored++;
-                }
-            }
-            if (countLatestOffsetStored == this.assignment.size()) {
-                this.coordinationDataWritten = true;
-            }
-        }
-
-        for (TopicPartition tp : assignment) {
-            topicPartitionWriters.get(tp).write();
-        }
-        */
     }
 
     private String getOtherConnectorInstanceName(int partition) {
@@ -374,11 +315,6 @@ public class CompactBackupSinkTask extends SinkTask {
         if (this.kafkaProducer != null) {
             this.kafkaProducer.close();
         }
-        /*
-        if (this.kafkaConsumer != null) {
-            this.kafkaConsumer.close();
-        }
-        */
         if (this.status.equals(StatusConnector.RUNNING) || this.status.equals(StatusConnector.ON_STARTING)) {
             clearAssignmentAndTopicPartitionWriter();
         }
@@ -413,7 +349,7 @@ public class CompactBackupSinkTask extends SinkTask {
         props.put("schema.registry.url", "http://schema-registry:8081");
         props.put("auto.offset.reset", "earliest");
         props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false);
-       
+
 
         props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteBufferDeserializer.class);
@@ -427,7 +363,7 @@ public class CompactBackupSinkTask extends SinkTask {
         props.put(SaslConfigs.SASL_MECHANISM, "PLAIN");
         props.put(ProducerConfig.CLIENT_ID_CONFIG, this.connectorConfig.getName());
         props.put("schema.registry.url", "http://schema-registry:8081");
-        
+
 
         props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
         props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteBufferSerializer.class);
@@ -443,10 +379,8 @@ public class CompactBackupSinkTask extends SinkTask {
 
     //TODO: Manage time by configuration
     private void setNextDate() {
-        SimpleDateFormat sdf = new SimpleDateFormat("yyyy/MM/dd HH:mm:ss");
         this.nextStart = Calendar.getInstance();
-        this.nextStart.add(Calendar.MINUTE, 5);
-        logger.warn("NEXT_START {} {}", this.connectorConfig.getName(), sdf.format(nextStart.getTime()));
+        this.nextStart.add(Calendar.HOUR, this.connectorConfig.getS3RetentionInHours());
     }
 
     private synchronized AvroCompactedLogBackupCoordination searchData(String topic, int partition, EnumType enumType) {
@@ -494,7 +428,6 @@ public class CompactBackupSinkTask extends SinkTask {
                             logger.error(e.getMessage(), e);
                         }
                         if (avroCompactedLogBackupCoordination != null) {
-                            //AvroCompactedLogBackupCoordination avroCompactedLogBackupCoordination = record.value();
                             if (topic.equalsIgnoreCase(avroCompactedLogBackupCoordination.getTopic().toString())) {
                                 if (partition == avroCompactedLogBackupCoordination.getPartition()) {
                                     if (enumType.equals(avroCompactedLogBackupCoordination.getEvent())) {

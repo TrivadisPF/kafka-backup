@@ -22,7 +22,6 @@ import org.slf4j.LoggerFactory;
 public class AmazonS3Utils {
 
     private static Logger logger = LoggerFactory.getLogger(AmazonS3Utils.class);
-    public static final String SEPARATOR = "/";
 
     public static AmazonS3 initConnection(AbstractBaseConnectorConfig connectorConfig) {
         AmazonS3ClientBuilder builder = AmazonS3ClientBuilder.standard();
@@ -40,15 +39,15 @@ public class AmazonS3Utils {
 
     public static void cleanLastBackup(AmazonS3 amazonS3, String bucketName, String connectorName, TopicPartition tp) {
         ListObjectsRequest request = new ListObjectsRequest().withBucketName(bucketName).
-                withPrefix(tp.topic() + Constants.KEY_SEPARATOR + connectorName +
-                        Constants.KEY_SEPARATOR + tp.partition() + Constants.KEY_SEPARATOR);
+                withPrefix(tp.topic() + Constants.S3_KEY_SEPARATOR + connectorName +
+                        Constants.S3_KEY_SEPARATOR + tp.partition() + Constants.S3_KEY_SEPARATOR);
         cleanBackup(amazonS3, request);
     }
 
     public static void cleanLastBackup(AmazonS3 amazonS3, String bucketName, String connectorName, String topicName) {
         ListObjectsRequest request = new ListObjectsRequest().withBucketName(bucketName).
-                withPrefix(topicName + Constants.KEY_SEPARATOR + connectorName +
-                        Constants.KEY_SEPARATOR);
+                withPrefix(topicName + Constants.S3_KEY_SEPARATOR + connectorName +
+                        Constants.S3_KEY_SEPARATOR);
         cleanBackup(amazonS3, request);
     }
 
