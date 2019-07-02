@@ -380,7 +380,7 @@ public class CompactBackupSinkTask extends SinkTask {
     //TODO: Manage time by configuration
     private void setNextDate() {
         this.nextStart = Calendar.getInstance();
-        this.nextStart.add(Calendar.HOUR, this.connectorConfig.getS3RetentionInHours());
+        this.nextStart.add(Calendar.HOUR, this.connectorConfig.getCompactedLogBackupLengthHours());
     }
 
     private synchronized AvroCompactedLogBackupCoordination searchData(String topic, int partition, EnumType enumType) {

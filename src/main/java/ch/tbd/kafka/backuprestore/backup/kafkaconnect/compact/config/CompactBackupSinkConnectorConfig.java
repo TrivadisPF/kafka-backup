@@ -27,11 +27,11 @@ public class CompactBackupSinkConnectorConfig extends BackupSinkConnectorConfig 
     private static final String COMPACTED_LOG_BACKUP_INITIAL_STATUS_DOC = "The status allow to the connector to define which connector is active at startup. There is no default value.";
     private static final String COMPACTED_LOG_BACKUP_INITIAL_STATUS_DISPLAY = "Initial status of connector ACTIVE/PASSIVE";
 
-    private static final String COMPACTED_LOG_BACKUP_LENGTH_DAYS_CONFIG = "compacted.log.backup.length.days";
-    private static final String COMPACTED_LOG_BACKUP_LENGTH_DAYS_DOC = "The time interval in days to verify if other connectors start to sleep or to backup." +
-            "The default value is 1 day";
-    private static final long COMPACTED_LOG_BACKUP_LENGTH_DAYS_DEFAULT = 1;
-    private static final String COMPACTED_LOG_BACKUP_LENGTH_DAYS_DISPLAY = "Status check Interval (day)";
+    private static final String COMPACTED_LOG_BACKUP_LENGTH_HOURS_CONFIG = "compacted.log.backup.length.hours";
+    private static final String COMPACTED_LOG_BACKUP_LENGTH_HOURS_DOC = "The time interval in hours to verify if other connectors start to sleep or to backup." +
+            "The default value is 6 hours";
+    private static final int COMPACTED_LOG_BACKUP_LENGTH_HOURS_DEFAULT = 6;
+    private static final String COMPACTED_LOG_BACKUP_LENGTH_HOURS_DISPLAY = "Status check Interval (hours)";
 
     public CompactBackupSinkConnectorConfig(Map<String, String> props) {
         this(conf(), props);
@@ -64,15 +64,15 @@ public class CompactBackupSinkConnectorConfig extends BackupSinkConnectorConfig 
 
 
         configDef.define(
-                COMPACTED_LOG_BACKUP_LENGTH_DAYS_CONFIG,
+                COMPACTED_LOG_BACKUP_LENGTH_HOURS_CONFIG,
                 Type.LONG,
-                COMPACTED_LOG_BACKUP_LENGTH_DAYS_DEFAULT,
+                COMPACTED_LOG_BACKUP_LENGTH_HOURS_DEFAULT,
                 Importance.HIGH,
-                COMPACTED_LOG_BACKUP_LENGTH_DAYS_DOC,
+                COMPACTED_LOG_BACKUP_LENGTH_HOURS_DOC,
                 group,
                 ++orderInGroup,
                 Width.LONG,
-                COMPACTED_LOG_BACKUP_LENGTH_DAYS_DISPLAY
+                COMPACTED_LOG_BACKUP_LENGTH_HOURS_DISPLAY
         );
         return configDef;
     }
@@ -85,6 +85,9 @@ public class CompactBackupSinkConnectorConfig extends BackupSinkConnectorConfig 
         return EnumType.valueOf(getString(COMPACTED_LOG_BACKUP_INITIAL_STATUS_CONFIG));
     }
 
+    public int getCompactedLogBackupLengthHours() {
+        return getInt(COMPACTED_LOG_BACKUP_LENGTH_HOURS_CONFIG);
+    }
 
     protected static String parseName(Map<String, String> props) {
         String nameProp = props.get("name");

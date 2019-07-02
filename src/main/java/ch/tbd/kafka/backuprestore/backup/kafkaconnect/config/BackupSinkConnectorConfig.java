@@ -78,12 +78,12 @@ public class BackupSinkConnectorConfig extends AbstractBaseConnectorConfig {
     private static final String FILENAME_OFFSET_ZERO_PAD_WIDTH_DISPLAY =
             "Filename Offset Zero Pad Width";
 
-    private static final String S3_RETENTION_POLICY_CONFIG = "s3.retention.policy.hours";
+    private static final String S3_RETENTION_POLICY_CONFIG = "s3.retention.policy.days";
     private static final String
             S3_RETENTION_POLICY_DOC =
-            "The retention in hours. It will be used to set the rules on S3 in order to clean the data inside the bucket. Default is 6 hours";
-    private static final int S3_RETENTION_POLICY_DEFAULT = 6;
-    private static final String S3_RETENTION_POLICY_DISPLAY = "Retention on S3 bucket (hours)";
+            "The retention in days. It will be used to set the rules on S3 in order to clean the data inside the bucket. Default is 1 day";
+    private static final int S3_RETENTION_POLICY_DEFAULT = 1;
+    private static final String S3_RETENTION_POLICY_DISPLAY = "Retention on S3 bucket (days)";
 
     private final String name;
 
@@ -310,7 +310,7 @@ public class BackupSinkConnectorConfig extends AbstractBaseConnectorConfig {
         return getBoolean(HEADERS_USE_EXPECT_CONTINUE_CONFIG);
     }
 
-    public int getS3RetentionInHours() {
+    public int getS3RetentionInDays() {
         return getInt(S3_RETENTION_POLICY_CONFIG);
     }
 

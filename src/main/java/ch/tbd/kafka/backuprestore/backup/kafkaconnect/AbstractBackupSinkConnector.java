@@ -53,7 +53,7 @@ public abstract class AbstractBackupSinkConnector extends SinkConnector {
             BucketLifecycleConfiguration.Rule rule1 = new BucketLifecycleConfiguration.Rule()
                     .withId(idRuleRetentionRuleId.toString())
                     .withFilter(new LifecycleFilter((new LifecyclePrefixPredicate(prefixRuleId.toString()))))
-                    .withExpirationInDays(config.getS3RetentionInHours())
+                    .withExpirationInDays(config.getS3RetentionInDays())
                     .withStatus(BucketLifecycleConfiguration.ENABLED);
 
             BucketLifecycleConfiguration configuration = amazonS3.getBucketLifecycleConfiguration(config.getBucketName());
