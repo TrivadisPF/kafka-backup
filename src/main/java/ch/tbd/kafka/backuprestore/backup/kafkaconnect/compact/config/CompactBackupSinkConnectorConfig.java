@@ -65,7 +65,7 @@ public class CompactBackupSinkConnectorConfig extends BackupSinkConnectorConfig 
 
         configDef.define(
                 COMPACTED_LOG_BACKUP_LENGTH_HOURS_CONFIG,
-                Type.LONG,
+                Type.INT,
                 COMPACTED_LOG_BACKUP_LENGTH_HOURS_DEFAULT,
                 Importance.HIGH,
                 COMPACTED_LOG_BACKUP_LENGTH_HOURS_DOC,
