@@ -81,8 +81,17 @@ public class RetentionTest extends AbstractTest {
         BucketLifecycleConfiguration bucketLifecycleConfiguration = amazonS3.getBucketLifecycleConfiguration(getBucketName());
         Assertions.assertEquals(rules.size(), bucketLifecycleConfiguration.getRules().size());
         if (bucketLifecycleConfiguration == null || bucketLifecycleConfiguration.getRules() == null
-                || bucketLifecycleConfiguration.getRules().isEmpty() || bucketLifecycleConfiguration.getRules().size() > 1) {
-            Assertions.fail("Configuration found is not expected");
+                || bucketLifecycleConfiguration.getRules().isEmpty()) {
+            boolean found = false;
+            for (BucketLifecycleConfiguration.Rule ruleRead : bucketLifecycleConfiguration.getRules()) {
+                if (ruleRead.getId().equalsIgnoreCase(idRule)) {
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
+                Assertions.fail("Configuration found is not expected");
+            }
         }
 
         S3OutputStream s3out = null;

@@ -38,8 +38,7 @@ public class BackupSinkTaskByIntervalTest extends AbstractTest {
 
     private static final Logger log = LoggerFactory.getLogger(BackupSinkTaskByIntervalTest.class);
 
-    protected static final String TOPIC_1_KEY = "topic.1.key";
-    protected static final String TOPIC_2_KEY = "topic.2.key";
+    protected static final String TOPICS = "topics";
     protected static final int PARTITION = 0;
 
     protected BackupSinkTask task;
@@ -55,8 +54,9 @@ public class BackupSinkTaskByIntervalTest extends AbstractTest {
     }
 
     public void setUp() {
-        TopicPartition TOPIC_PARTITION = new TopicPartition(getPropertiesMap().get(TOPIC_1_KEY), PARTITION);
-        TopicPartition TOPIC_PARTITION_NEW = new TopicPartition(getPropertiesMap().get(TOPIC_2_KEY), PARTITION);
+        List<String> topics = Arrays.asList(getPropertiesMap().get(TOPICS).split(","));
+        TopicPartition TOPIC_PARTITION = new TopicPartition(topics.get(0), PARTITION);
+        TopicPartition TOPIC_PARTITION_NEW = new TopicPartition(topics.get(1), PARTITION);
         Set<TopicPartition> assignment = new HashSet<>();
         assignment.add(TOPIC_PARTITION);
         assignment.add(TOPIC_PARTITION_NEW);
@@ -75,19 +75,24 @@ public class BackupSinkTaskByIntervalTest extends AbstractTest {
         task.initialize(context);
 
         task.start(getPropertiesMap());
+        Assertions.assertEquals("BackupSinkTaskByIntervalTest", this.connectorConfig.getName());
+        Assertions.assertEquals("test-junit-topic-interval-1,test-junit-topic-interval-2", this.connectorConfig.getTopics());
+        Assertions.assertNotNull(this.connectorConfig.getTopicsList());
+        Assertions.assertEquals(2, this.connectorConfig.getTopicsList().size());
         String record = "record-value" + new Random().nextInt();
+        List<String> topics = Arrays.asList(getPropertiesMap().get(TOPICS).split(","));
         List<SinkRecord> sinkRecordsList = new ArrayList<>();
-        sinkRecordsList.add(new SinkRecord(getPropertiesMap().get(TOPIC_1_KEY), 0, Schema.STRING_SCHEMA, "key", Schema.STRING_SCHEMA, record, 0, new Date().getTime(), TimestampType.CREATE_TIME));
-        sinkRecordsList.add(new SinkRecord(getPropertiesMap().get(TOPIC_1_KEY), 0, Schema.STRING_SCHEMA, "key1", Schema.STRING_SCHEMA, record, 1, new Date().getTime(), TimestampType.CREATE_TIME));
-        sinkRecordsList.add(new SinkRecord(getPropertiesMap().get(TOPIC_1_KEY), 0, Schema.STRING_SCHEMA, "key2", Schema.STRING_SCHEMA, record, 2, new Date().getTime(), TimestampType.CREATE_TIME));
-        sinkRecordsList.add(new SinkRecord(getPropertiesMap().get(TOPIC_2_KEY), 0, Schema.STRING_SCHEMA, "key", Schema.STRING_SCHEMA, record, 0, new Date().getTime(), TimestampType.CREATE_TIME));
-        sinkRecordsList.add(new SinkRecord(getPropertiesMap().get(TOPIC_2_KEY), 0, Schema.STRING_SCHEMA, "key1", Schema.STRING_SCHEMA, record, 1, new Date().getTime(), TimestampType.CREATE_TIME));
-        sinkRecordsList.add(new SinkRecord(getPropertiesMap().get(TOPIC_2_KEY), 0, Schema.STRING_SCHEMA, "key2", Schema.STRING_SCHEMA, record, 2, new Date().getTime(), TimestampType.CREATE_TIME));
+        sinkRecordsList.add(new SinkRecord(topics.get(0), 0, Schema.STRING_SCHEMA, "key", Schema.STRING_SCHEMA, record, 0, new Date().getTime(), TimestampType.CREATE_TIME));
+        sinkRecordsList.add(new SinkRecord(topics.get(0), 0, Schema.STRING_SCHEMA, "key1", Schema.STRING_SCHEMA, record, 1, new Date().getTime(), TimestampType.CREATE_TIME));
+        sinkRecordsList.add(new SinkRecord(topics.get(0), 0, Schema.STRING_SCHEMA, "key2", Schema.STRING_SCHEMA, record, 2, new Date().getTime(), TimestampType.CREATE_TIME));
+        sinkRecordsList.add(new SinkRecord(topics.get(1), 0, Schema.STRING_SCHEMA, "key", Schema.STRING_SCHEMA, record, 0, new Date().getTime(), TimestampType.CREATE_TIME));
+        sinkRecordsList.add(new SinkRecord(topics.get(1), 0, Schema.STRING_SCHEMA, "key1", Schema.STRING_SCHEMA, record, 1, new Date().getTime(), TimestampType.CREATE_TIME));
+        sinkRecordsList.add(new SinkRecord(topics.get(1), 0, Schema.STRING_SCHEMA, "key2", Schema.STRING_SCHEMA, record, 2, new Date().getTime(), TimestampType.CREATE_TIME));
         task.put(sinkRecordsList);
         task.close(context.assignment());
         task.stop();
-        verifyData(getPropertiesMap().get(TOPIC_1_KEY));
-        verifyData(getPropertiesMap().get(TOPIC_2_KEY));
+        verifyData(topics.get(0));
+        verifyData(topics.get(1));
     }
 
     private void verifyData(String topicName) {
