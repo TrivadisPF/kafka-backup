@@ -24,9 +24,6 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.nio.charset.Charset;
-import java.time.LocalDateTime;
-import java.time.temporal.ChronoField;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -136,9 +133,13 @@ public class RestoreSourceTask extends SourceTask {
                             Map<String, String> sourcePartition = Collections.singletonMap(TOPIC_PARTITION_FIELD, keyPartitionOffsetKafkaConnect(kafkaRecord.getPartition()));
                             Map<String, Long> sourceOffset = Collections.singletonMap(TOPIC_POSITION_FIELD, kafkaRecord.getOffset());
                             lastOffsetS3Read.put(kafkaRecord.getPartition(), kafkaRecord.getOffset());
+                            Object key = kafkaRecord.getKey().array().length == 0 ? null : kafkaRecord.getKey().array();
+                            Object value = kafkaRecord.getValue().array().length == 0 ? null : kafkaRecord.getValue().array();
                             sourceRecordList.add(new SourceRecord(sourcePartition, sourceOffset, kafkaTopicName,
-                                    kafkaRecord.getPartition(), Schema.BYTES_SCHEMA, SerializationDataUtils.deserialize(kafkaRecord.getKey().array()),
-                                    Schema.BYTES_SCHEMA, SerializationDataUtils.deserialize(kafkaRecord.getValue().array()), kafkaRecord.getTimestamp(), headerList(kafkaRecord.getHeaders())));
+                                    //kafkaRecord.getPartition(), Schema.BYTES_SCHEMA, SerializationDataUtils.deserialize(kafkaRecord.getKey().array()),
+                                    kafkaRecord.getPartition(), Schema.BYTES_SCHEMA, key,
+                                    //Schema.BYTES_SCHEMA, SerializationDataUtils.deserialize(kafkaRecord.getValue().array()), kafkaRecord.getTimestamp(), headerList(kafkaRecord.getHeaders())));
+                                    Schema.BYTES_SCHEMA, value, kafkaRecord.getTimestamp(), headerList(kafkaRecord.getHeaders())));
                         }
                     });
                 }
@@ -175,13 +176,14 @@ public class RestoreSourceTask extends SourceTask {
 
     private List<Header> headerList(Map<String, ByteBuffer> mapHeaders) {
         ConnectHeaders connectHeaders = new ConnectHeaders();
-        connectHeaders.addBytes(Constants.KEY_HEADER_RESTORED, Long.toString(LocalDateTime.now().getLong(ChronoField.MICRO_OF_SECOND)).getBytes(Charset.forName("UTF-8")));
+        connectHeaders.addLong(Constants.KEY_HEADER_RESTORED, Calendar.getInstance().getTimeInMillis());
         connectHeaders.addBoolean(Constants.KEY_HEADER_RECOVER, Boolean.valueOf(true));
         List<Header> headerList = new ArrayList<>();
         if (mapHeaders != null && !mapHeaders.isEmpty()) {
             mapHeaders.keySet().iterator().forEachRemaining(header -> {
                 ByteBuffer value = mapHeaders.get(header);
-                connectHeaders.add(header, value, Schema.STRING_SCHEMA);
+                Object data = SerializationDataUtils.deserialize(value.array());
+                connectHeaders.add(header, data, understandType(data));
             });
         }
         connectHeaders.iterator().forEachRemaining(header -> {
@@ -189,6 +191,21 @@ public class RestoreSourceTask extends SourceTask {
         });
 
         return headerList;
+    }
+
+    private Schema understandType(Object data) {
+        if (data instanceof Integer) {
+            return Schema.INT64_SCHEMA;
+        } else if (data instanceof String) {
+            return Schema.STRING_SCHEMA;
+        } else if (data instanceof byte[]) {
+            return Schema.BYTES_SCHEMA;
+        } else if (data instanceof Float) {
+            return Schema.FLOAT64_SCHEMA;
+        } else if (data instanceof Boolean) {
+            return Schema.BOOLEAN_SCHEMA;
+        }
+        return null;
     }
 
     private LinkedList<KafkaRecord> convertS3ObjectToKafkaRecords(S3ObjectInputStream s3ObjectInputStream) {

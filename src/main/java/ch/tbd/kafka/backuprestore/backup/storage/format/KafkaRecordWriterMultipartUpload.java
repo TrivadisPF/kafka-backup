@@ -77,10 +77,13 @@ public class KafkaRecordWriterMultipartUpload implements RecordWriter {
                     .setPartition(sinkRecord.kafkaPartition())
                     .setOffset(sinkRecord.kafkaOffset())
                     .setTimestamp(sinkRecord.timestamp())
-                    .setKey(ByteBuffer.wrap(SerializationDataUtils.serialize(sinkRecord.key())))
-                    .setValue(ByteBuffer.wrap(SerializationDataUtils.serialize(sinkRecord.value())))
+                    //.setKey(sinkRecord.key() == null ? ByteBuffer.wrap(new byte[0]) : ByteBuffer.wrap(SerializationDataUtils.serialize(sinkRecord.key())))
+                    //.setValue(sinkRecord.value() == null ? ByteBuffer.wrap(new byte[0]) : ByteBuffer.wrap(SerializationDataUtils.serialize(sinkRecord.value())))
+                    .setKey(sinkRecord.key() == null ? ByteBuffer.wrap(new byte[0]) : ByteBuffer.wrap((byte[]) sinkRecord.key()))
+                    .setValue(sinkRecord.value() == null ? ByteBuffer.wrap(new byte[0]) : ByteBuffer.wrap((byte[]) sinkRecord.value()))
                     .setHeaders(newMapHeaders)
                     .build();
+
 
             dataFileWriter.append(avroKafkaRecord);
         } catch (IOException e) {

@@ -33,6 +33,12 @@ public class CompactBackupSinkConnectorConfig extends BackupSinkConnectorConfig 
     private static final int COMPACTED_LOG_BACKUP_LENGTH_HOURS_DEFAULT = 6;
     private static final String COMPACTED_LOG_BACKUP_LENGTH_HOURS_DISPLAY = "Status check Interval (hours)";
 
+    private static final String COMPACTED_LOG_BACKUP_INTERVAL_OFFSETS_CONFIG = "compacted.log.backup.interval.offsets";
+    private static final String COMPACTED_LOG_BACKUP_INTERVAL_OFFSETS_DOC = "The offset interval to notify from the active to \"on_starting\" thread what is the new offset as target." +
+            "The default value is 1000 offsets";
+    private static final int COMPACTED_LOG_BACKUP_INTERVAL_OFFSETS_DEFAULT = 1000;
+    private static final String COMPACTED_LOG_BACKUP_INTERVAL_OFFSETS_DISPLAY = "Compacted log interval offset";
+
     public CompactBackupSinkConnectorConfig(Map<String, String> props) {
         this(conf(), props);
     }
@@ -62,7 +68,6 @@ public class CompactBackupSinkConnectorConfig extends BackupSinkConnectorConfig 
                 new EnumTypeCompactLogInitialStatusRecommender()
         );
 
-
         configDef.define(
                 COMPACTED_LOG_BACKUP_LENGTH_HOURS_CONFIG,
                 Type.INT,
@@ -73,6 +78,18 @@ public class CompactBackupSinkConnectorConfig extends BackupSinkConnectorConfig 
                 ++orderInGroup,
                 Width.LONG,
                 COMPACTED_LOG_BACKUP_LENGTH_HOURS_DISPLAY
+        );
+
+        configDef.define(
+                COMPACTED_LOG_BACKUP_INTERVAL_OFFSETS_CONFIG,
+                Type.LONG,
+                COMPACTED_LOG_BACKUP_INTERVAL_OFFSETS_DEFAULT,
+                Importance.HIGH,
+                COMPACTED_LOG_BACKUP_INTERVAL_OFFSETS_DOC,
+                group,
+                ++orderInGroup,
+                Width.LONG,
+                COMPACTED_LOG_BACKUP_INTERVAL_OFFSETS_DISPLAY
         );
         return configDef;
     }
@@ -87,6 +104,10 @@ public class CompactBackupSinkConnectorConfig extends BackupSinkConnectorConfig 
 
     public int getCompactedLogBackupLengthHours() {
         return getInt(COMPACTED_LOG_BACKUP_LENGTH_HOURS_CONFIG);
+    }
+
+    public long getCompactedLogBackupIntervalOffsets() {
+        return getLong(COMPACTED_LOG_BACKUP_INTERVAL_OFFSETS_CONFIG);
     }
 
     protected static String parseName(Map<String, String> props) {

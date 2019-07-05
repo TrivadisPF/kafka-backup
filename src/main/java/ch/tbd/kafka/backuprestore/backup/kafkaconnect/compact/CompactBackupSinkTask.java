@@ -1,6 +1,5 @@
 package ch.tbd.kafka.backuprestore.backup.kafkaconnect.compact;
 
-import ch.tbd.kafka.backuprestore.backup.kafkaconnect.BackupSinkTask;
 import ch.tbd.kafka.backuprestore.backup.kafkaconnect.compact.config.CompactBackupSinkConnectorConfig;
 import ch.tbd.kafka.backuprestore.backup.storage.partitioner.DefaultPartitioner;
 import ch.tbd.kafka.backuprestore.backup.storage.partitioner.Partitioner;
@@ -8,6 +7,7 @@ import ch.tbd.kafka.backuprestore.backup.storage.partitioner.TopicPartitionWrite
 import ch.tbd.kafka.backuprestore.model.avro.AvroCompactedLogBackupCoordination;
 import ch.tbd.kafka.backuprestore.model.avro.EnumType;
 import ch.tbd.kafka.backuprestore.util.AmazonS3Utils;
+import ch.tbd.kafka.backuprestore.util.Constants;
 import ch.tbd.kafka.backuprestore.util.Version;
 import com.amazonaws.services.s3.AmazonS3;
 import org.apache.kafka.clients.admin.AdminClientConfig;
@@ -46,7 +46,7 @@ import java.util.*;
 public class CompactBackupSinkTask extends SinkTask {
 
 
-    private static final Logger logger = LoggerFactory.getLogger(BackupSinkTask.class);
+    private static final Logger logger = LoggerFactory.getLogger(CompactBackupSinkTask.class);
     private CompactBackupSinkConnectorConfig connectorConfig;
     private final Set<TopicPartition> assignment;
     private final Map<TopicPartition, TopicPartitionWriter> topicPartitionWriters;
@@ -61,9 +61,9 @@ public class CompactBackupSinkTask extends SinkTask {
     private final String TOPIC_COORDINATOR_NAME = "_compacted_log_backup_coordination";
     private AmazonS3 amazonS3;
 
-    private Map<TopicPartition, Long> mapCoordinationTopic = new HashMap<>();
+    private Map<TopicPartition, AvroCompactedLogBackupCoordination> mapCoordinationTopic = new HashMap<>();
     private Map<TopicPartition, AvroCompactedLogBackupCoordination> mapActivatePartitions = new HashMap<>();
-    private Set<AvroCompactedLogBackupCoordination> mapPassivatePartitions = new HashSet<>();
+    private Map<TopicPartition, AvroCompactedLogBackupCoordination> mapPassivatePartitions = new HashMap<>();
     private final int CHECK_COORDINATION_TOPIC_INTERVAL_IN_SEC = 30;
 
     private StatusConnector status = null;
@@ -150,7 +150,6 @@ public class CompactBackupSinkTask extends SinkTask {
             switch (this.status) {
                 case WAITING:
                     logger.info("WAITING {} - Topic {} Partition {} Offset {}", this.connectorConfig.getName(), topic, partition, offset);
-                    //if (mapActivatePartitions.isEmpty() || mapActivatePartitions.keySet().size() < this.assignment.size()) {
                     if (mapActivatePartitions.isEmpty() || !mapActivatePartitions.containsKey(tp)) {
                         if (mapActivatePartitions.isEmpty() && (nextCheckToActivateStatus == null || Calendar.getInstance().after(nextCheckToActivateStatus))) {
                             AvroCompactedLogBackupCoordination data = searchData(tp.topic(), tp.partition(), EnumType.ACTIVATE);
@@ -181,9 +180,16 @@ public class CompactBackupSinkTask extends SinkTask {
                     break;
                 case ON_STARTING:
                     logger.info("ON_STARTING {} - Topic {} Partition {} Offset {}", this.connectorConfig.getName(), topic, partition, offset);
-                    if (mapActivatePartitions.get(tp) != null
-                            && mapActivatePartitions.get(tp).getOffset() <= offset) {
-                        mapActivatePartitions.remove(tp);
+                    if (mapActivatePartitions.get(tp) != null) {
+                        if (mapActivatePartitions.get(tp).getOffset() <= offset) {
+                            AvroCompactedLogBackupCoordination data = searchData(tp.topic(), tp.partition(), EnumType.ACTIVATE);
+                            if (data != null) {
+                                mapActivatePartitions.put(tp, data);
+                                storeTumbstoneDataCoordinateTopic(tp.partition());
+                            } else {
+                                mapActivatePartitions.remove(tp);
+                            }
+                        }
                     }
                     topicPartitionWriters.get(tp).buffer(record);
                     for (TopicPartition tp1 : assignment) {
@@ -201,23 +207,29 @@ public class CompactBackupSinkTask extends SinkTask {
                     logger.info("RUNNING {} - Topic {} Partition {} Offset {}", this.connectorConfig.getName(), topic, partition, offset);
                     if (elapsedInterval()) {
                         if (this.mapCoordinationTopic.isEmpty() || !this.mapCoordinationTopic.containsKey(tp)) {
-                            storeDataCoordinateTopic(tp, offset, EnumType.ACTIVATE);
-                            this.mapCoordinationTopic.put(tp, offset);
+                            this.mapCoordinationTopic.put(tp, storeDataCoordinateTopic(tp, offset, EnumType.ACTIVATE));
                         } else if (!this.mapCoordinationTopic.isEmpty() && this.mapCoordinationTopic.keySet().size() == this.assignment.size()) {
                             if (nextCheckToPassivateStatus == null || Calendar.getInstance().after(nextCheckToPassivateStatus)) {
                                 AvroCompactedLogBackupCoordination data = searchData(tp.topic(), tp.partition(), EnumType.PASSIVATE);
                                 if (data != null) {
-                                    mapPassivatePartitions.add(data);
+                                    mapPassivatePartitions.put(tp, data);
                                     storeTumbstoneDataCoordinateTopic(tp.partition());
                                 }
                                 nextCheckToPassivateStatus = addTimeToWait(nextCheckToPassivateStatus);
+                            } else {
+                                if (!mapPassivatePartitions.containsKey(tp)
+                                        && this.mapCoordinationTopic.containsKey(tp)
+                                        && (offset - this.mapCoordinationTopic.get(tp).getOffset()) > this.connectorConfig.getCompactedLogBackupIntervalOffsets()) {
+                                    this.mapCoordinationTopic.put(tp, storeDataCoordinateTopic(tp, offset, EnumType.ACTIVATE));
+                                }
                             }
                         }
+
                         topicPartitionWriters.get(tp).buffer(record);
                         for (TopicPartition tp1 : assignment) {
                             topicPartitionWriters.get(tp1).write();
                         }
-                        if (mapPassivatePartitions.size() == this.assignment.size()) {
+                        if (mapPassivatePartitions.keySet().size() == this.assignment.size()) {
                             clearAssignmentAndTopicPartitionWriter();
                             this.status = StatusConnector.WAITING;
                             this.mapCoordinationTopic.clear();
@@ -243,22 +255,22 @@ public class CompactBackupSinkTask extends SinkTask {
 
     private String getOtherConnectorInstanceName(int partition) {
         String nameCurrentInstance = this.connectorConfig.getName();
-        int indexEnd = nameCurrentInstance.lastIndexOf("-");
+        int indexEnd = nameCurrentInstance.lastIndexOf(Constants.CONNECTOR_NAME_KEY_SEPARATOR);
         if (indexEnd == -1) {
             this.stop();
             throw new IllegalArgumentException(MessageFormat.format("Naming convention for connector {0} not respected", nameCurrentInstance));
         }
         StringBuilder nameOtherConnectorInstance = new StringBuilder(nameCurrentInstance.substring(0, indexEnd));
         if (this.connectorConfig.getCompactedLogBackupInitialStatusConfig().equals(EnumType.ACTIVATE)) {
-            nameOtherConnectorInstance.append("-").append(EnumType.PASSIVATE.toString().toLowerCase());
+            nameOtherConnectorInstance.append(Constants.CONNECTOR_NAME_KEY_SEPARATOR).append(EnumType.PASSIVATE.toString().toLowerCase());
         } else {
-            nameOtherConnectorInstance.append("-").append(EnumType.ACTIVATE.toString().toLowerCase());
+            nameOtherConnectorInstance.append(Constants.CONNECTOR_NAME_KEY_SEPARATOR).append(EnumType.ACTIVATE.toString().toLowerCase());
         }
-        nameOtherConnectorInstance.append("-").append(partition);
+        nameOtherConnectorInstance.append(Constants.CONNECTOR_NAME_KEY_SEPARATOR).append(partition);
         return nameOtherConnectorInstance.toString();
     }
 
-    private void storeDataCoordinateTopic(TopicPartition topicPartition, long offset, EnumType enumType) {
+    private AvroCompactedLogBackupCoordination storeDataCoordinateTopic(TopicPartition topicPartition, long offset, EnumType enumType) {
         String key = getOtherConnectorInstanceName(topicPartition.partition());
         AvroCompactedLogBackupCoordination avroCompactedLogBackupCoordination = new AvroCompactedLogBackupCoordination().newBuilder()
                 .setConnectorInstanceName(key)
@@ -275,12 +287,14 @@ public class CompactBackupSinkTask extends SinkTask {
         } catch (IOException e) {
             logger.error(e.getMessage(), e);
         }
+        return avroCompactedLogBackupCoordination;
     }
 
     private void storeTumbstoneDataCoordinateTopic(int partition) {
-        String key = this.connectorConfig.getName() + "-" + partition;
+        StringBuilder sbKey = new StringBuilder(this.connectorConfig.getName());
+        sbKey.append(Constants.CONNECTOR_NAME_KEY_SEPARATOR).append(partition);
 
-        this.kafkaProducer.send(new ProducerRecord<>(TOPIC_COORDINATOR_NAME, key, null));
+        this.kafkaProducer.send(new ProducerRecord<>(TOPIC_COORDINATOR_NAME, sbKey.toString(), null));
         this.kafkaProducer.flush();
 
     }
@@ -377,10 +391,10 @@ public class CompactBackupSinkTask extends SinkTask {
         return false;
     }
 
-    //TODO: Manage time by configuration
     private void setNextDate() {
         this.nextStart = Calendar.getInstance();
-        this.nextStart.add(Calendar.HOUR, this.connectorConfig.getCompactedLogBackupLengthHours());
+        //this.nextStart.add(Calendar.HOUR, this.connectorConfig.getCompactedLogBackupLengthHours());
+        this.nextStart.add(Calendar.MINUTE, 6);
     }
 
     private synchronized AvroCompactedLogBackupCoordination searchData(String topic, int partition, EnumType enumType) {
@@ -413,10 +427,11 @@ public class CompactBackupSinkTask extends SinkTask {
                         continue;
                 }
                 for (ConsumerRecord<String, ByteBuffer> record : consumerRecords) {
-                    String keyExpected = this.connectorConfig.getName() + "-" + partition;
+                    StringBuilder sbKeyExpected = new StringBuilder(this.connectorConfig.getName());
+                    sbKeyExpected.append(Constants.CONNECTOR_NAME_KEY_SEPARATOR).append(partition);
                     String key = record.key();
                     ByteBuffer value = record.value();
-                    if (keyExpected.equalsIgnoreCase(key)) {
+                    if (sbKeyExpected.toString().equalsIgnoreCase(key)) {
                         if (value == null) {
                             data = null;
                             continue;

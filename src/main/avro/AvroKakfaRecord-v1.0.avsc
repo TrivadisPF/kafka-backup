@@ -8,7 +8,7 @@
         {"name": "offset", "type": "long"},
         {"name": "timestamp", "type": "long"},
         {"name": "key", "type": [ "bytes", "null" ], "default": "null" },
-        {"name": "value", "type": "bytes"},
+        {"name": "value", "type":[ "bytes", "null" ], "default": "null" },
         {"name": "headers", "type": [ {"type": "map", "values": "bytes"}, "null" ], "default": "null"}
     ]
 }
