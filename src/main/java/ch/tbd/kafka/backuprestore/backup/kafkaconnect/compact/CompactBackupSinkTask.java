@@ -255,18 +255,18 @@ public class CompactBackupSinkTask extends SinkTask {
 
     private String getOtherConnectorInstanceName(int partition) {
         String nameCurrentInstance = this.connectorConfig.getName();
-        int indexEnd = nameCurrentInstance.lastIndexOf(Constants.CONNECTOR_NAME_KEY_SEPARATOR);
+        int indexEnd = nameCurrentInstance.lastIndexOf(Constants.DASH_KEY_SEPARATOR);
         if (indexEnd == -1) {
             this.stop();
             throw new IllegalArgumentException(MessageFormat.format("Naming convention for connector {0} not respected", nameCurrentInstance));
         }
         StringBuilder nameOtherConnectorInstance = new StringBuilder(nameCurrentInstance.substring(0, indexEnd));
         if (this.connectorConfig.getCompactedLogBackupInitialStatusConfig().equals(EnumType.ACTIVATE)) {
-            nameOtherConnectorInstance.append(Constants.CONNECTOR_NAME_KEY_SEPARATOR).append(EnumType.PASSIVATE.toString().toLowerCase());
+            nameOtherConnectorInstance.append(Constants.DASH_KEY_SEPARATOR).append(EnumType.PASSIVATE.toString().toLowerCase());
         } else {
-            nameOtherConnectorInstance.append(Constants.CONNECTOR_NAME_KEY_SEPARATOR).append(EnumType.ACTIVATE.toString().toLowerCase());
+            nameOtherConnectorInstance.append(Constants.DASH_KEY_SEPARATOR).append(EnumType.ACTIVATE.toString().toLowerCase());
         }
-        nameOtherConnectorInstance.append(Constants.CONNECTOR_NAME_KEY_SEPARATOR).append(partition);
+        nameOtherConnectorInstance.append(Constants.DASH_KEY_SEPARATOR).append(partition);
         return nameOtherConnectorInstance.toString();
     }
 
@@ -292,7 +292,7 @@ public class CompactBackupSinkTask extends SinkTask {
 
     private void storeTumbstoneDataCoordinateTopic(int partition) {
         StringBuilder sbKey = new StringBuilder(this.connectorConfig.getName());
-        sbKey.append(Constants.CONNECTOR_NAME_KEY_SEPARATOR).append(partition);
+        sbKey.append(Constants.DASH_KEY_SEPARATOR).append(partition);
 
         this.kafkaProducer.send(new ProducerRecord<>(TOPIC_COORDINATOR_NAME, sbKey.toString(), null));
         this.kafkaProducer.flush();
@@ -428,7 +428,7 @@ public class CompactBackupSinkTask extends SinkTask {
                 }
                 for (ConsumerRecord<String, ByteBuffer> record : consumerRecords) {
                     StringBuilder sbKeyExpected = new StringBuilder(this.connectorConfig.getName());
-                    sbKeyExpected.append(Constants.CONNECTOR_NAME_KEY_SEPARATOR).append(partition);
+                    sbKeyExpected.append(Constants.DASH_KEY_SEPARATOR).append(partition);
                     String key = record.key();
                     ByteBuffer value = record.value();
                     if (sbKeyExpected.toString().equalsIgnoreCase(key)) {

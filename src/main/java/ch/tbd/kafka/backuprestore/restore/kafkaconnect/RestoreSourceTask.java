@@ -226,7 +226,7 @@ public class RestoreSourceTask extends SourceTask {
     }
 
     private String keyPartitionOffsetKafkaConnect(int partition) {
-        return s3TopicName + "-" + kafkaTopicName + "-" + partition;
+        return s3TopicName + Constants.DASH_KEY_SEPARATOR + kafkaTopicName + Constants.DASH_KEY_SEPARATOR + partition;
     }
 
 }
