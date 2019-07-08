@@ -39,6 +39,15 @@ public class CompactBackupSinkConnectorConfig extends BackupSinkConnectorConfig 
     private static final int COMPACTED_LOG_BACKUP_INTERVAL_OFFSETS_DEFAULT = 1000;
     private static final String COMPACTED_LOG_BACKUP_INTERVAL_OFFSETS_DISPLAY = "Compacted log interval offset";
 
+    private static final String COMPACTED_LOG_BACKUP_PATH_CONFIGURATION_CONFIG = "compacted.log.backup.path.configuration";
+    private static final String COMPACTED_LOG_BACKUP_PATH_CONFIGURATION_DOC = "The path where is configured the connect-distributed.properties file.";
+    private static final String COMPACTED_LOG_BACKUP_PATH_CONFIGURATION_DISPLAY = "Compacted log configuration path";
+
+    private static final String COMPACTED_LOG_BACKUP_LOGIN_MODULE_NAME_JAAS_CONFIG = "compacted.log.backup.login.name.jaas.configuration";
+    private static final String COMPACTED_LOG_BACKUP_LOGIN_MODULE_NAME_JAAS_DOC = "The name of the KafkaClient auth defined inside the jaas file. Default is null";
+    private static final String COMPACTED_LOG_BACKUP_LOGIN_MODULE_NAME_JAAS_DEFAULT = null;
+    private static final String COMPACTED_LOG_BACKUP_LOGIN_MODULE_NAME_JAAS_DISPLAY = "Name KafkaClient to consider for the auth";
+
     public CompactBackupSinkConnectorConfig(Map<String, String> props) {
         this(conf(), props);
     }
@@ -91,6 +100,30 @@ public class CompactBackupSinkConnectorConfig extends BackupSinkConnectorConfig 
                 Width.LONG,
                 COMPACTED_LOG_BACKUP_INTERVAL_OFFSETS_DISPLAY
         );
+
+        configDef.define(
+                COMPACTED_LOG_BACKUP_PATH_CONFIGURATION_CONFIG,
+                Type.STRING,
+                Importance.HIGH,
+                COMPACTED_LOG_BACKUP_PATH_CONFIGURATION_DOC,
+                group,
+                ++orderInGroup,
+                Width.LONG,
+                COMPACTED_LOG_BACKUP_PATH_CONFIGURATION_DISPLAY
+        );
+
+        configDef.define(
+                COMPACTED_LOG_BACKUP_LOGIN_MODULE_NAME_JAAS_CONFIG,
+                Type.STRING,
+                COMPACTED_LOG_BACKUP_LOGIN_MODULE_NAME_JAAS_DEFAULT,
+                Importance.HIGH,
+                COMPACTED_LOG_BACKUP_LOGIN_MODULE_NAME_JAAS_DOC,
+                group,
+                ++orderInGroup,
+                Width.LONG,
+                COMPACTED_LOG_BACKUP_LOGIN_MODULE_NAME_JAAS_DISPLAY
+        );
+
         return configDef;
     }
 
@@ -108,6 +141,14 @@ public class CompactBackupSinkConnectorConfig extends BackupSinkConnectorConfig 
 
     public long getCompactedLogBackupIntervalOffsets() {
         return getLong(COMPACTED_LOG_BACKUP_INTERVAL_OFFSETS_CONFIG);
+    }
+
+    public String getCompactedLogBackupPathConfigurationConfig() {
+        return getString(COMPACTED_LOG_BACKUP_PATH_CONFIGURATION_CONFIG);
+    }
+
+    public String getCompactedLogBackupLoginModuleNameJaasConfig() {
+        return getString(COMPACTED_LOG_BACKUP_LOGIN_MODULE_NAME_JAAS_CONFIG);
     }
 
     protected static String parseName(Map<String, String> props) {

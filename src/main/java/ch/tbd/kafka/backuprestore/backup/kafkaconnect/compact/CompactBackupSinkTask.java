@@ -10,6 +10,7 @@ import ch.tbd.kafka.backuprestore.util.AmazonS3Utils;
 import ch.tbd.kafka.backuprestore.util.Constants;
 import ch.tbd.kafka.backuprestore.util.Version;
 import com.amazonaws.services.s3.AmazonS3;
+import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.consumer.*;
 import org.apache.kafka.clients.producer.KafkaProducer;
@@ -18,6 +19,8 @@ import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.SaslConfigs;
+import org.apache.kafka.common.config.SslConfigs;
+import org.apache.kafka.common.security.JaasContext;
 import org.apache.kafka.common.serialization.ByteBufferDeserializer;
 import org.apache.kafka.common.serialization.ByteBufferSerializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
@@ -30,7 +33,10 @@ import org.apache.kafka.connect.sink.SinkTaskContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.security.auth.login.AppConfigurationEntry;
+import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.text.MessageFormat;
 import java.time.Duration;
@@ -65,6 +71,8 @@ public class CompactBackupSinkTask extends SinkTask {
     private Map<TopicPartition, AvroCompactedLogBackupCoordination> mapActivatePartitions = new HashMap<>();
     private Map<TopicPartition, AvroCompactedLogBackupCoordination> mapPassivatePartitions = new HashMap<>();
     private final int CHECK_COORDINATION_TOPIC_INTERVAL_IN_SEC = 30;
+    private static Properties propertiesConfigurationKafkaConnect;
+    private static JaasContext jaasContext;
 
     private StatusConnector status = null;
 
@@ -355,15 +363,10 @@ public class CompactBackupSinkTask extends SinkTask {
     }
 
     private Consumer<String, ByteBuffer> createConsumer() {
-        Properties props = new Properties();
-        props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "kafka:29092");
-        props.put(AdminClientConfig.SECURITY_PROTOCOL_CONFIG, "PLAINTEXT");
-        props.put(SaslConfigs.SASL_MECHANISM, "GSSAPI");
+        Properties props = defineCommonProperties(this.connectorConfig.getCompactedLogBackupLoginModuleNameJaasConfig());
         props.put(ConsumerConfig.GROUP_ID_CONFIG, this.connectorConfig.getName());
-        props.put("schema.registry.url", "http://schema-registry:8081");
         props.put("auto.offset.reset", "earliest");
         props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false);
-
 
         props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteBufferDeserializer.class);
@@ -371,17 +374,103 @@ public class CompactBackupSinkTask extends SinkTask {
     }
 
     private Producer<String, ByteBuffer> createProducer() {
-        Properties props = new Properties();
-        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "kafka:29092");
-        props.put(AdminClientConfig.SECURITY_PROTOCOL_CONFIG, "PLAINTEXT");
-        props.put(SaslConfigs.SASL_MECHANISM, "PLAIN");
-        props.put(ProducerConfig.CLIENT_ID_CONFIG, this.connectorConfig.getName());
-        props.put("schema.registry.url", "http://schema-registry:8081");
 
+        Properties props = defineCommonProperties(this.connectorConfig.getCompactedLogBackupLoginModuleNameJaasConfig());
+        props.put(ProducerConfig.CLIENT_ID_CONFIG, this.connectorConfig.getName());
 
         props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
         props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteBufferSerializer.class);
         return new KafkaProducer<>(props);
+    }
+
+    private Properties defineCommonProperties(String loginModuleName) {
+        initializeConfiguration(this.connectorConfig.getCompactedLogBackupPathConfigurationConfig());
+
+        Properties props = new Properties();
+        props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, CompactBackupSinkTask.propertiesConfigurationKafkaConnect.getProperty(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG));
+        String securityProtocol = "PLAINTEXT";
+        if (CompactBackupSinkTask.propertiesConfigurationKafkaConnect.getProperty(AdminClientConfig.SECURITY_PROTOCOL_CONFIG) != null) {
+            securityProtocol = CompactBackupSinkTask.propertiesConfigurationKafkaConnect.getProperty(AdminClientConfig.SECURITY_PROTOCOL_CONFIG);
+        }
+        props.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, securityProtocol);
+        String saslMechanism = "PLAIN";
+        if (CompactBackupSinkTask.propertiesConfigurationKafkaConnect.getProperty(SaslConfigs.SASL_MECHANISM) != null) {
+            saslMechanism = CompactBackupSinkTask.propertiesConfigurationKafkaConnect.getProperty(SaslConfigs.SASL_MECHANISM);
+        }
+        props.put(SaslConfigs.SASL_MECHANISM, saslMechanism);
+
+        if (propertiesConfigurationKafkaConnect.getProperty("schema.registry.url") != null) {
+            props.put("schema.registry.url", CompactBackupSinkTask.propertiesConfigurationKafkaConnect.getProperty("schema.registry.url"));
+        }
+
+        if (jaasContext != null) {
+            StringBuilder jaasString = null;
+            for (AppConfigurationEntry appconfigurationEntry : jaasContext.configurationEntries()) {
+                if (null != loginModuleName && appconfigurationEntry.getLoginModuleName().equalsIgnoreCase(loginModuleName)) {
+                    jaasString = new StringBuilder();
+                    jaasString.append(appconfigurationEntry.getLoginModuleName()).append(" ");
+                    if (appconfigurationEntry.getControlFlag() != null) {
+                        if (appconfigurationEntry.getControlFlag().equals(AppConfigurationEntry.LoginModuleControlFlag.OPTIONAL)) {
+                            jaasString.append("optional ");
+                        } else if (appconfigurationEntry.getControlFlag().equals(AppConfigurationEntry.LoginModuleControlFlag.REQUIRED)) {
+                            jaasString.append("required ");
+                        } else if (appconfigurationEntry.getControlFlag().equals(AppConfigurationEntry.LoginModuleControlFlag.REQUISITE)) {
+                            jaasString.append("requisite ");
+                        } else if (appconfigurationEntry.getControlFlag().equals(AppConfigurationEntry.LoginModuleControlFlag.SUFFICIENT)) {
+                            jaasString.append("sufficient ");
+                        }
+                    }
+                    if (appconfigurationEntry.getOptions() != null && !appconfigurationEntry.getOptions().isEmpty()) {
+                        Iterator<String> it = appconfigurationEntry.getOptions().keySet().iterator();
+                        while (it.hasNext()) {
+                            jaasString.append(" ");
+                            String key = it.next();
+                            Object value = appconfigurationEntry.getOptions().get(key);
+                            jaasString.append(key).append("=").append(value);
+                        }
+                        jaasString.append(";");
+                    }
+                }
+            }
+
+            if (jaasString != null) {
+                props.put(SaslConfigs.SASL_JAAS_CONFIG, jaasString.toString());
+            }
+        }
+
+
+        if (CompactBackupSinkTask.propertiesConfigurationKafkaConnect.getProperty(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG) != null) {
+            props.put(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, CompactBackupSinkTask.propertiesConfigurationKafkaConnect.getProperty(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG));
+        }
+
+        if (CompactBackupSinkTask.propertiesConfigurationKafkaConnect.getProperty(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG) != null) {
+            props.put(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, CompactBackupSinkTask.propertiesConfigurationKafkaConnect.getProperty(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG));
+        }
+
+        return props;
+    }
+
+    private synchronized static void initializeConfiguration(String pathConfiguration) {
+        if (CompactBackupSinkTask.propertiesConfigurationKafkaConnect == null) {
+            loadConfigurationKafkaConnect(pathConfiguration);
+        }
+
+        if (CompactBackupSinkTask.jaasContext == null) {
+            try {
+                CompactBackupSinkTask.jaasContext = JaasContext.loadClientContext(System.getenv());
+            } catch (IllegalArgumentException e) {
+                logger.warn("Error during load the jaas context. {}", e.getMessage());
+            }
+        }
+    }
+
+    private synchronized static void loadConfigurationKafkaConnect(String pathConfiguration) {
+        CompactBackupSinkTask.propertiesConfigurationKafkaConnect = new Properties();
+        try (InputStream input = new FileInputStream(pathConfiguration)) {
+            propertiesConfigurationKafkaConnect.load(input);
+        } catch (IOException e) {
+            logger.error("Error during load the configuration file. {}", e.getMessage());
+        }
     }
 
     private boolean elapsedInterval() {
@@ -393,8 +482,7 @@ public class CompactBackupSinkTask extends SinkTask {
 
     private void setNextDate() {
         this.nextStart = Calendar.getInstance();
-        //this.nextStart.add(Calendar.HOUR, this.connectorConfig.getCompactedLogBackupLengthHours());
-        this.nextStart.add(Calendar.MINUTE, 6);
+        this.nextStart.add(Calendar.HOUR, this.connectorConfig.getCompactedLogBackupLengthHours());
     }
 
     private synchronized AvroCompactedLogBackupCoordination searchData(String topic, int partition, EnumType enumType) {

@@ -68,7 +68,11 @@ curl -X PUT http://localhost:8084/connectors/backup-activate/config
         "s3.proxy.url": "TBD", 
         "s3.proxy.port": "TBD", 
         "compacted.log.backup.initial.status":"ACTIVATE", 
-        "tasks.max":"1"}'
+        "tasks.max":"1",
+        "compacted.log.backup.length.hours":"1",
+        "compacted.log.backup.interval.offsets": "10000",
+        "compacted.log.backup.path.configuration":"/etc/kafka-connect/kafka-connect.properties",
+        "compacted.log.backup.login.name.jaas.configuration": "LoginModuleName"}'
 
 curl -X PUT http://localhost:8084/connectors/backup-passivate/config 
      -H 'Content-Type: application/json' 
@@ -84,7 +88,11 @@ curl -X PUT http://localhost:8084/connectors/backup-passivate/config
         "s3.proxy.url": "TBD", 
         "s3.proxy.port": "TBD", 
         "compacted.log.backup.initial.status":"PASSIVATE", 
-        "tasks.max":"1"}'
+        "tasks.max":"1",
+        "compacted.log.backup.length.hours":"1",
+        "compacted.log.backup.interval.offsets": "10000",
+        "compacted.log.backup.path.configuration":"/etc/kafka-connect/kafka-connect.properties",
+        "compacted.log.backup.login.name.jaas.configuration": "LoginModuleName"}'
 ```
 
 ### Starting a Restore 
