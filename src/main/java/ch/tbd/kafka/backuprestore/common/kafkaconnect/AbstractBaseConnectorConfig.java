@@ -32,6 +32,11 @@ public abstract class AbstractBaseConnectorConfig extends AbstractConfig impleme
     private static final String S3_BUCKET_DOC = "The S3 Bucket.";
     private static final String S3_BUCKET_DISPLAY = "S3 Bucket";
 
+    public static final String S3_PROFILE_NAME_CONFIG = "s3.profile.name";
+    private static final String S3_PROFILE_NAME_DOC = "The profile name to use in Amazon configuration.";
+    private static final String S3_PROFILE_NAME_DEFAULT = null;
+    private static final String S3_PROFILE_NAME_DISPLAY = "S3 Profile name";
+
     private static final String SSEA_CONFIG = "s3.ssea.name";
     private static final String SSEA_CONFIG_DOC = "The S3 Server Side Encryption Algorithm.";
     private static final String SSEA_CONFIG_DISPLAY = "S3 Server Side Encryption Algorithm";
@@ -121,6 +126,18 @@ public abstract class AbstractBaseConnectorConfig extends AbstractConfig impleme
                 ++orderInGroup,
                 Width.LONG,
                 S3_BUCKET_DISPLAY
+        );
+
+        configDef.define(
+                S3_PROFILE_NAME_CONFIG,
+                Type.STRING,
+                S3_PROFILE_NAME_DEFAULT,
+                Importance.HIGH,
+                S3_PROFILE_NAME_DOC,
+                group,
+                ++orderInGroup,
+                Width.LONG,
+                S3_PROFILE_NAME_DISPLAY
         );
 
         List<String> validSsea = new ArrayList<>(SSEAlgorithm.values().length + 1);
@@ -260,6 +277,10 @@ public abstract class AbstractBaseConnectorConfig extends AbstractConfig impleme
 
     public String getBucketName() {
         return getString(S3_BUCKET_CONFIG);
+    }
+
+    public String getS3ProfileNameConfig() {
+        return getString(S3_PROFILE_NAME_CONFIG);
     }
 
     public String getSsea() {

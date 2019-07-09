@@ -41,7 +41,7 @@ All records will be maintained inside the topic. There is also the retention pol
 #####Assumptions
 The S3 bucket need to be empty. In other case the process will override the files.
 The data will be stored using the following naming conventions "BUCKET_NAME/TOPIC_NAME/PARTITION_NUMBER/TOPIC_NAME-RECORD_PARTITION-RECORD_OFFSET.avro"
-
+The properties s3.profile.name is optional. It represent the name of the profile to use inside the credentials file for AWS
 It is possible to configure the buffer of the data to upload on S3, using a number of records (flush.size) or by interval (rotate.interval.ms)
 
 The following curl is an example of the configuration to a normal backup of topic.
@@ -73,7 +73,7 @@ The idea is to start two processes (ACTIVATE/PASSIVATE) which some times change 
 #####Assumptions
 The S3 bucket need to be empty. In other case the process will override the files. When the system change the status from PASSIVATE to ACTIVATE automatically it will clean the S3 bucket before to start the backup.
 The data will be stored using the following naming conventions "BUCKET_NAME/TOPIC_NAME/BACKUP_INSTANCE/PARTITION_NUMBER/TOPIC_NAME-RECORD_PARTITION-RECORD_OFFSET.avro"
-
+The properties s3.profile.name is optional. It represent the name of the profile to use inside the credentials file for AWS
 It is possible to configure the buffer of the data to upload on S3, using a number of records (flush.size) or by interval (rotate.interval.ms)
 
 The following curl is an example of the configuration to a normal backup of topic.
@@ -129,7 +129,7 @@ The restore process get the data/metadata from S3 bucket and store it on kafka t
 
 ####Assumptions
 The topics exist and have the same configuration about the data to restore (same number of partitions, same properties,...)
-
+The properties s3.profile.name is optional. It represent the name of the profile to use inside the credentials file for AWS
 The property instance.name.restore is optional and it is used in case the backup it is related to the compacted topics. In this case need to put explicitly the name of the instance which want to restore.
 
 ```
