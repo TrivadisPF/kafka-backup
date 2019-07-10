@@ -45,6 +45,12 @@ public class RestoreSourceConnectorConfig extends AbstractBaseConnectorConfig {
     public static final int BATCH_MAX_RECORDS_DEFAULT = 100;
     private static final String BATCH_MAX_RECORDS_DISPLAY = "Max Record per execution to commit";
 
+    public static final String INSTANCE_NAME_TO_RESTORE_CONFIG = "instance.name.restore";
+    private static final String INSTANCE_NAME_TO_RESTORE_DOC =
+            "Represent the name of the instance to restore in case the backup is related to a compacted topic.";
+    private static final String INSTANCE_NAME_TO_RESTORE_DEFAULT = null;
+    private static final String INSTANCE_NAME_TO_RESTORE_DISPLAY = "Name instance to restore (only for compacted topic backup)";
+
     public RestoreSourceConnectorConfig(Map<String, String> props) {
         this(conf(), props);
         logger.info("RestoreSourceConnectorConfig(Map<String, String> props)");
@@ -95,6 +101,18 @@ public class RestoreSourceConnectorConfig extends AbstractBaseConnectorConfig {
                 Width.SHORT,
                 BATCH_MAX_RECORDS_DISPLAY);
 
+        configDef.define(
+                INSTANCE_NAME_TO_RESTORE_CONFIG,
+                Type.STRING,
+                INSTANCE_NAME_TO_RESTORE_DEFAULT,
+                Importance.MEDIUM,
+                INSTANCE_NAME_TO_RESTORE_DOC,
+                group,
+                ++orderInGroup,
+                Width.SHORT,
+                INSTANCE_NAME_TO_RESTORE_DISPLAY);
+
+
         return configDef;
     }
 
@@ -110,6 +128,14 @@ public class RestoreSourceConnectorConfig extends AbstractBaseConnectorConfig {
         return getInt(BATCH_MAX_RECORDS_CONFIG);
     }
 
+    public boolean isInstanceNameToRestoreConfigDefined() {
+        return getString(INSTANCE_NAME_TO_RESTORE_CONFIG) != null && !getString(INSTANCE_NAME_TO_RESTORE_CONFIG).isEmpty();
+    }
+
+    public String getInstanceNameToRestoreConfig() {
+        return getString(INSTANCE_NAME_TO_RESTORE_CONFIG);
+    }
+
     public List<RestoreTopicName> getTopicName() {
         List<String> topicsList = getList(TOPIC_S3_NAME);
         List<RestoreTopicName> restoreTopicNameList = new ArrayList<>();
@@ -120,7 +146,7 @@ public class RestoreSourceConnectorConfig extends AbstractBaseConnectorConfig {
     }
 
     private String getTopicNameByIndex(String topicName, int index) {
-        if (topicName!=null && topicName.indexOf(":") > -1 && topicName.split(":").length > index) {
+        if (topicName != null && topicName.indexOf(":") > -1 && topicName.split(":").length > index) {
             return topicName.split(":")[index];
         }
         return topicName;

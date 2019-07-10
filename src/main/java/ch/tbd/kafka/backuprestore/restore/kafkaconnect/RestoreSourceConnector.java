@@ -42,8 +42,19 @@ public class RestoreSourceConnector extends SourceConnector {
         Map<String, PartitionRecord> mapTopicPartitionRecord = new HashMap<>();
         int countTotalPartitions = 0;
         for (RestoreTopicName restoreTopicName : listTopicNames) {
-            ListObjectsRequest req = new ListObjectsRequest().
-                    withBucketName(connectorConfig.getBucketName()).withPrefix(restoreTopicName.getS3TopicName() + AmazonS3Utils.SEPARATOR);
+            final int positionToSplit;
+            ListObjectsRequest req = null;
+            if (this.connectorConfig.isInstanceNameToRestoreConfigDefined()) {
+                req = new ListObjectsRequest().
+                        withBucketName(connectorConfig.getBucketName())
+                        .withPrefix(restoreTopicName.getS3TopicName() + Constants.S3_KEY_SEPARATOR + this.connectorConfig.getInstanceNameToRestoreConfig() + Constants.S3_KEY_SEPARATOR);
+                positionToSplit = 2;
+            } else {
+                req = new ListObjectsRequest().
+                        withBucketName(connectorConfig.getBucketName()).withPrefix(restoreTopicName.getS3TopicName() + Constants.S3_KEY_SEPARATOR);
+                positionToSplit = 1;
+            }
+
             ObjectListing result = amazonS3.listObjects(req);
 
             List<S3ObjectSummary> s3ObjectSummaries = result.getObjectSummaries();
@@ -51,9 +62,28 @@ public class RestoreSourceConnector extends SourceConnector {
                 result = amazonS3.listNextBatchOfObjects(result);
                 s3ObjectSummaries.addAll(result.getObjectSummaries());
             }
+            if (this.connectorConfig.isInstanceNameToRestoreConfigDefined()) {
+                for (S3ObjectSummary s3ObjectSummary : s3ObjectSummaries) {
+                    int len = s3ObjectSummary.getKey().split(Constants.S3_KEY_SEPARATOR).length;
+                    if (len != 4) {
+                        logger.error("Is defined an instance {} but no backup it was found.", this.connectorConfig.getInstanceNameToRestoreConfig());
+                        stop();
+                        return Collections.emptyList();
+                    }
+                }
+            } else {
+                for (S3ObjectSummary s3ObjectSummary : s3ObjectSummaries) {
+                    int len = s3ObjectSummary.getKey().split(Constants.S3_KEY_SEPARATOR).length;
+                    if (len != 3) {
+                        logger.error("No instance defined on configuration but the backup contains one or more instances. Please check.");
+                        stop();
+                        return Collections.emptyList();
+                    }
+                }
+            }
             s3ObjectSummaries.stream().forEach(s3ObjectSummary -> {
-                String[] keys = s3ObjectSummary.getKey().split("/");
-                int partition = Integer.parseInt(keys[1]);
+                String[] keys = s3ObjectSummary.getKey().split(Constants.S3_KEY_SEPARATOR);
+                int partition = Integer.parseInt(keys[positionToSplit]);
                 if (!mapTopicPartitionRecord.containsKey(getKey(restoreTopicName))) {
                     mapTopicPartitionRecord.put(getKey(restoreTopicName), new PartitionRecord(restoreTopicName.getS3TopicName(), restoreTopicName.getKafkaTopicName()));
                 }
@@ -67,7 +97,6 @@ public class RestoreSourceConnector extends SourceConnector {
 
         List<PartitionRecord> partitionRecordList = mapTopicPartitionRecord.values().stream().collect(Collectors.toList());
         Collections.sort(partitionRecordList, Comparator.comparing(PartitionRecord::getSizePartitions).reversed());
-
 
         List<Map<String, String>> taskConfigs = new ArrayList<>(maxTasks);
 
