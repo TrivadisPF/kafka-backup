@@ -26,7 +26,7 @@ public class AmazonS3Utils {
     public static AmazonS3 initConnection(AbstractBaseConnectorConfig connectorConfig) {
         AmazonS3ClientBuilder builder = AmazonS3ClientBuilder.standard();
         builder.withRegion(connectorConfig.getRegionConfig());
-        builder.setCredentials(new ProfileCredentialsProvider());
+        builder.setCredentials(new ProfileCredentialsProvider(connectorConfig.getS3ProfileNameConfig()));
         if (connectorConfig.getProxyUrlConfig() != null && !connectorConfig.getProxyUrlConfig().isEmpty() && connectorConfig.getProxyPortConfig() > 0) {
             ClientConfiguration config = new ClientConfiguration();
             config.setProtocol(Protocol.HTTPS);
