@@ -21,7 +21,7 @@ public class Version {
         try {
             Properties props = new Properties();
             props.load(Version.class.getResourceAsStream(FILE));
-            versionConnector = props.getProperty("version", versionConnector).trim();
+            versionConnector = props.getProperty("app.version", versionConnector).trim();
         } catch (Exception e) {
             log.warn("Error while loading version:" + FILE, e);
         }

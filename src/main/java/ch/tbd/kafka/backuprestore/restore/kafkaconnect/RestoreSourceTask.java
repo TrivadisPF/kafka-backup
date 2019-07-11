@@ -24,9 +24,6 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.nio.charset.Charset;
-import java.time.LocalDateTime;
-import java.time.temporal.ChronoField;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -40,10 +37,13 @@ public class RestoreSourceTask extends SourceTask {
 
     private RestoreSourceConnectorConfig connectorConfig;
     private AmazonS3 amazonS3;
+    private String s3TopicName;
+    private String kafkaTopicName;
     private int[] partitionAssigned = null;
     private Map<Integer, Long> lastOffsetCommittedOnKafka = new HashMap<>();
     private Map<Integer, Long> lastOffsetS3Read = new HashMap<>();
     private final AtomicBoolean running = new AtomicBoolean(false);
+    private Set<String> keyRestored = new HashSet<>();
 
     @Override
     public String version() {
@@ -52,7 +52,10 @@ public class RestoreSourceTask extends SourceTask {
 
     @Override
     public void start(Map<String, String> map) {
-        String partitionAssignedInConnector = map.get(Constants.PARTITION_ASSIGNED_KEY);
+        this.kafkaTopicName = map.get(Constants.KEY_TOPIC_NAME_TASK);
+        this.s3TopicName = map.get(Constants.KEY_S3_TOPIC_NAME_TASK);
+        String partitionAssignedInConnector = map.get(Constants.KEY_PARTITION_TASK);
+
         if (partitionAssignedInConnector != null && partitionAssignedInConnector.indexOf(";") == -1) {
             //I have only one partition
             this.partitionAssigned = new int[1];
@@ -100,8 +103,14 @@ public class RestoreSourceTask extends SourceTask {
             if (!hasMoreSpaceToAddRecords(sourceRecordList)) {
                 break;
             }
-            ListObjectsRequest objectsPartitionReq = new ListObjectsRequest().withBucketName(connectorConfig.getBucketName()).
-                    withPrefix(connectorConfig.getTopicS3Name() + Constants.KEY_SEPARATOR + partitionAssigned[i] + Constants.KEY_SEPARATOR);
+            ListObjectsRequest objectsPartitionReq = null;
+            if (this.connectorConfig.isInstanceNameToRestoreConfigDefined()) {
+                objectsPartitionReq = new ListObjectsRequest().withBucketName(connectorConfig.getBucketName()).
+                        withPrefix(s3TopicName + Constants.S3_KEY_SEPARATOR + this.connectorConfig.getInstanceNameToRestoreConfig() + Constants.S3_KEY_SEPARATOR + partitionAssigned[i] + Constants.S3_KEY_SEPARATOR);
+            } else {
+                objectsPartitionReq = new ListObjectsRequest().withBucketName(connectorConfig.getBucketName()).
+                        withPrefix(s3TopicName + Constants.S3_KEY_SEPARATOR + partitionAssigned[i] + Constants.S3_KEY_SEPARATOR);
+            }
             ObjectListing resultPartitionReq = amazonS3.listObjects(objectsPartitionReq);
             if (resultPartitionReq != null) {
                 List<S3ObjectSummary> s3ObjectSummaries = resultPartitionReq.getObjectSummaries();
@@ -116,19 +125,29 @@ public class RestoreSourceTask extends SourceTask {
                         break;
                     }
                     S3ObjectSummary s3ObjectSummary = it.next();
-                    GetObjectRequest getObjectRequest = new GetObjectRequest(connectorConfig.getBucketName(), s3ObjectSummary.getKey());
-                    LinkedList<KafkaRecord> kafkaRecordLinkedList = convertS3ObjectToKafkaRecords(amazonS3.getObject(getObjectRequest).getObjectContent());
-                    kafkaRecordLinkedList.stream().forEach(kafkaRecord -> {
-                        if (checkValidOffsetOnKafka(kafkaRecord.getPartition(), kafkaRecord.getOffset())
-                                && checkValidOffsetS3(kafkaRecord.getPartition(), kafkaRecord.getOffset())) {
-                            Map<String, String> sourcePartition = Collections.singletonMap(TOPIC_PARTITION_FIELD, keyPartitionOffsetKafkaConnect(kafkaRecord.getPartition()));
-                            Map<String, Long> sourceOffset = Collections.singletonMap(TOPIC_POSITION_FIELD, kafkaRecord.getOffset());
-                            lastOffsetS3Read.put(kafkaRecord.getPartition(), kafkaRecord.getOffset());
-                            sourceRecordList.add(new SourceRecord(sourcePartition, sourceOffset, connectorConfig.getTopicKafkaName(),
-                                    kafkaRecord.getPartition(), Schema.BYTES_SCHEMA, SerializationDataUtils.deserialize(kafkaRecord.getKey().array()),
-                                    Schema.BYTES_SCHEMA, SerializationDataUtils.deserialize(kafkaRecord.getValue().array()), kafkaRecord.getTimestamp(), headerList(kafkaRecord.getHeaders())));
+                    if (!keyRestored.contains(s3ObjectSummary.getKey())) {
+                        GetObjectRequest getObjectRequest = new GetObjectRequest(connectorConfig.getBucketName(), s3ObjectSummary.getKey());
+                        LinkedList<KafkaRecord> kafkaRecordLinkedList = convertS3ObjectToKafkaRecords(amazonS3.getObject(getObjectRequest).getObjectContent());
+                        int countRecordsRemainToCommit = kafkaRecordLinkedList.size();
+                        for (KafkaRecord kafkaRecord : kafkaRecordLinkedList) {
+                            if (hasMoreSpaceToAddRecords(sourceRecordList)
+                                    && checkValidOffsetOnKafka(kafkaRecord.getPartition(), kafkaRecord.getOffset())
+                                    && checkValidOffsetS3(kafkaRecord.getPartition(), kafkaRecord.getOffset())) {
+                                Map<String, String> sourcePartition = Collections.singletonMap(TOPIC_PARTITION_FIELD, keyPartitionOffsetKafkaConnect(kafkaRecord.getPartition()));
+                                Map<String, Long> sourceOffset = Collections.singletonMap(TOPIC_POSITION_FIELD, kafkaRecord.getOffset());
+                                lastOffsetS3Read.put(kafkaRecord.getPartition(), kafkaRecord.getOffset());
+                                Object key = kafkaRecord.getKey().array().length == 0 ? null : kafkaRecord.getKey().array();
+                                Object value = kafkaRecord.getValue().array().length == 0 ? null : kafkaRecord.getValue().array();
+                                sourceRecordList.add(new SourceRecord(sourcePartition, sourceOffset, kafkaTopicName,
+                                        kafkaRecord.getPartition(), Schema.BYTES_SCHEMA, key,
+                                        Schema.BYTES_SCHEMA, value, kafkaRecord.getTimestamp(), headerList(kafkaRecord.getHeaders())));
+                                countRecordsRemainToCommit--;
+                            }
                         }
-                    });
+                        if (countRecordsRemainToCommit == 0) {
+                            keyRestored.add(s3ObjectSummary.getKey());
+                        }
+                    }
                 }
             }
         }
@@ -163,13 +182,14 @@ public class RestoreSourceTask extends SourceTask {
 
     private List<Header> headerList(Map<String, ByteBuffer> mapHeaders) {
         ConnectHeaders connectHeaders = new ConnectHeaders();
-        connectHeaders.addBytes(Constants.KEY_HEADER_RESTORED, Long.toString(LocalDateTime.now().getLong(ChronoField.MICRO_OF_SECOND)).getBytes(Charset.forName("UTF-8")));
+        connectHeaders.addLong(Constants.KEY_HEADER_RESTORED, Calendar.getInstance().getTimeInMillis());
         connectHeaders.addBoolean(Constants.KEY_HEADER_RECOVER, Boolean.valueOf(true));
         List<Header> headerList = new ArrayList<>();
         if (mapHeaders != null && !mapHeaders.isEmpty()) {
             mapHeaders.keySet().iterator().forEachRemaining(header -> {
                 ByteBuffer value = mapHeaders.get(header);
-                connectHeaders.add(header, value, Schema.STRING_SCHEMA);
+                Object data = SerializationDataUtils.deserialize(value.array());
+                connectHeaders.add(header, data, understandType(data));
             });
         }
         connectHeaders.iterator().forEachRemaining(header -> {
@@ -177,6 +197,21 @@ public class RestoreSourceTask extends SourceTask {
         });
 
         return headerList;
+    }
+
+    private Schema understandType(Object data) {
+        if (data instanceof Integer) {
+            return Schema.INT64_SCHEMA;
+        } else if (data instanceof String) {
+            return Schema.STRING_SCHEMA;
+        } else if (data instanceof byte[]) {
+            return Schema.BYTES_SCHEMA;
+        } else if (data instanceof Float) {
+            return Schema.FLOAT64_SCHEMA;
+        } else if (data instanceof Boolean) {
+            return Schema.BOOLEAN_SCHEMA;
+        }
+        return null;
     }
 
     private LinkedList<KafkaRecord> convertS3ObjectToKafkaRecords(S3ObjectInputStream s3ObjectInputStream) {
@@ -197,7 +232,7 @@ public class RestoreSourceTask extends SourceTask {
     }
 
     private String keyPartitionOffsetKafkaConnect(int partition) {
-        return this.connectorConfig.getTopicS3Name() + "-" + this.connectorConfig.getTopicKafkaName() + "-" + partition;
+        return s3TopicName + Constants.DASH_KEY_SEPARATOR + kafkaTopicName + Constants.DASH_KEY_SEPARATOR + partition;
     }
 
 }

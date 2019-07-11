@@ -15,18 +15,18 @@ Each record from Kafka is written to the Backup serialised as an Avro Record in 
 
 ```
 {
-  "namespace": "ch.tbd.kafka.backuprestore.model.avro",
-  "type": "record",
-  "name": "AvroKafkaRecord",
-  "fields" : [
-    {"name": "topic", "type": "string"},
-    {"name": "partition", "type": "int"},
-    {"name": "offset", "type": "long"},
-    {"name": "timestamp", "type": "long"},
-    {"name": "key", "type": [ "bytes", "null" ], "default": "null" },
-    {"name": "value", "type": "bytes"},
-    {"name": "headers", "type": [ {"type": "map", "values": "bytes"}, "null" ], "default": null}
-  ]
+    "namespace": "ch.tbd.kafka.backuprestore.model.avro",
+    "type": "record",
+    "name": "AvroKafkaRecord",
+    "fields" : [
+        {"name": "topic", "type": "string"},
+        {"name": "partition", "type": "int"},
+        {"name": "offset", "type": "long"},
+        {"name": "timestamp", "type": "long"},
+        {"name": "key", "type": [ "bytes", "null" ], "default": "null" },
+        {"name": "value", "type": "bytes"},
+        {"name": "headers", "type": [ {"type": "map", "values": "bytes"}, "null" ], "default": null}
+    ]
 }
 ```
 
@@ -54,8 +54,6 @@ topics
 ```
 
 
-
-
 ## Data Retention on Backup
 
 The data in the backup should not be kept much longer than the data-retention on the Kafka topic. If the Kafka topic is 
@@ -79,7 +77,8 @@ If a topic is a so-called "compacted log" topic, then data is deleted based on k
 
 In such a case we cannot remove data in the same way as for the size- and time-based topics.
 
-**Idea:** we create regular snapshots of the complete topic (if it is a compacted log topic), one snapshot per partition. This is done in parallel to the "normal" backup activity. Once the snapshot is complete, we can remove all backup data older than the start of the snapshot. A restore will first restore the snapshot and then "replays" the data from the "regular" backup for all the data which is newer than the "largest" message in the snapshot.
+[Issue #30](https://github.com/TrivadisPF/kafka-backup/issues/30) describes two possible issues we discussed. Read more about the specifics under [Backup of Compacted Log Topics](BackupOfCompactedLogTopics.md).
+
 
 # Restore
 
