@@ -3,8 +3,6 @@ package ch.tbd.kafka.backuprestore.backup.storage.format;
 import ch.tbd.kafka.backuprestore.backup.kafkaconnect.config.BackupSinkConnectorConfig;
 import ch.tbd.kafka.backuprestore.model.KafkaRecord;
 import ch.tbd.kafka.backuprestore.model.avro.AvroKafkaRecord;
-import com.amazonaws.ClientConfiguration;
-import com.amazonaws.Protocol;
 import com.amazonaws.auth.profile.ProfileCredentialsProvider;
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.AmazonS3ClientBuilder;
@@ -38,6 +36,7 @@ public class KafkaRecordWriter implements RecordWriter {
         AmazonS3ClientBuilder builder = AmazonS3ClientBuilder.standard();
         builder.withRegion(connectorConfig.getRegionConfig());
         builder.withCredentials(new ProfileCredentialsProvider());
+        /*
         if (connectorConfig.getProxyUrlConfig() != null && !connectorConfig.getProxyUrlConfig().isEmpty() && connectorConfig.getProxyPortConfig() > 0) {
             ClientConfiguration config = new ClientConfiguration();
             config.setProtocol(Protocol.HTTPS);
@@ -45,6 +44,7 @@ public class KafkaRecordWriter implements RecordWriter {
             config.setProxyPort(connectorConfig.getProxyPortConfig());
             builder.withClientConfiguration(config);
         }
+         */
         this.amazonS3 = builder.build();
         this.bucket = connectorConfig.getBucketName();
     }
@@ -129,7 +129,7 @@ public class KafkaRecordWriter implements RecordWriter {
             baos.close();
             return bytes != null ? new ByteArrayInputStream(bytes) : null;
 
-        }catch (Exception e) {
+        } catch (Exception e) {
             e.printStackTrace();
         }
         //return byteArrayFinal != null ? new ByteArrayInputStream(byteArrayFinal) : null;
