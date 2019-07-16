@@ -140,7 +140,7 @@ public class RestoreSourceTask extends SourceTask {
                                 Object value = kafkaRecord.getValue().array().length == 0 ? null : kafkaRecord.getValue().array();
                                 sourceRecordList.add(new SourceRecord(sourcePartition, sourceOffset, kafkaTopicName,
                                         kafkaRecord.getPartition(), Schema.BYTES_SCHEMA, key,
-                                        Schema.BYTES_SCHEMA, value, kafkaRecord.getTimestamp(), headerList(kafkaRecord.getHeaders())));
+                                        Schema.BYTES_SCHEMA, value, kafkaRecord.getTimestamp(), headerList(kafkaRecord.getHeaders(), kafkaRecord.getOffset())));
                                 countRecordsRemainToCommit--;
                             }
                         }
@@ -180,10 +180,11 @@ public class RestoreSourceTask extends SourceTask {
         running.set(false);
     }
 
-    private List<Header> headerList(Map<String, ByteBuffer> mapHeaders) {
+    private List<Header> headerList(Map<String, ByteBuffer> mapHeaders, long offset) {
         ConnectHeaders connectHeaders = new ConnectHeaders();
-        connectHeaders.addLong(Constants.KEY_HEADER_RESTORED, Calendar.getInstance().getTimeInMillis());
-        connectHeaders.addBoolean(Constants.KEY_HEADER_RECOVER, Boolean.valueOf(true));
+        connectHeaders.addString(Constants.KEY_HEADER_OLD_OFFSET, String.valueOf(offset));
+        connectHeaders.addString(Constants.KEY_HEADER_RESTORED, String.valueOf(Calendar.getInstance().getTimeInMillis()));
+        connectHeaders.addString(Constants.KEY_HEADER_RECOVER, String.valueOf(true));
         List<Header> headerList = new ArrayList<>();
         if (mapHeaders != null && !mapHeaders.isEmpty()) {
             mapHeaders.keySet().iterator().forEachRemaining(header -> {

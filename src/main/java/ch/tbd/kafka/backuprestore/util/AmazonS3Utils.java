@@ -2,8 +2,11 @@ package ch.tbd.kafka.backuprestore.util;
 
 import ch.tbd.kafka.backuprestore.common.kafkaconnect.AbstractBaseConnectorConfig;
 import com.amazonaws.ClientConfiguration;
-import com.amazonaws.Protocol;
+import com.amazonaws.PredefinedClientConfigurations;
 import com.amazonaws.auth.profile.ProfileCredentialsProvider;
+import com.amazonaws.retry.PredefinedBackoffStrategies;
+import com.amazonaws.retry.PredefinedRetryPolicies;
+import com.amazonaws.retry.RetryPolicy;
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.AmazonS3ClientBuilder;
 import com.amazonaws.services.s3.model.ListObjectsRequest;
@@ -11,6 +14,8 @@ import com.amazonaws.services.s3.model.ObjectListing;
 import org.apache.kafka.common.TopicPartition;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import static ch.tbd.kafka.backuprestore.common.kafkaconnect.AbstractBaseConnectorConfig.*;
 
 /**
  * Class AmazonS3Utils.
@@ -22,18 +27,19 @@ import org.slf4j.LoggerFactory;
 public class AmazonS3Utils {
 
     private static Logger logger = LoggerFactory.getLogger(AmazonS3Utils.class);
+    private static final String VERSION_FORMAT = "APN/1.0 Confluent/1.0 KafkaS3Connector/%s";
 
     public static AmazonS3 initConnection(AbstractBaseConnectorConfig connectorConfig) {
+        ClientConfiguration clientConfiguration = newClientConfiguration(connectorConfig);
         AmazonS3ClientBuilder builder = AmazonS3ClientBuilder.standard();
+        builder.withAccelerateModeEnabled(connectorConfig.getBoolean(WAN_MODE_CONFIG));
         builder.withRegion(connectorConfig.getRegionConfig());
-        builder.setCredentials(new ProfileCredentialsProvider(connectorConfig.getS3ProfileNameConfig()));
-        if (connectorConfig.getProxyUrlConfig() != null && !connectorConfig.getProxyUrlConfig().isEmpty() && connectorConfig.getProxyPortConfig() > 0) {
-            ClientConfiguration config = new ClientConfiguration();
-            config.setProtocol(Protocol.HTTPS);
-            config.setProxyHost(connectorConfig.getProxyUrlConfig());
-            config.setProxyPort(connectorConfig.getProxyPortConfig());
-            builder.withClientConfiguration(config);
+        if (null == connectorConfig.getS3ProfileNameConfig()) {
+            builder.setCredentials(new ProfileCredentialsProvider());
+        } else {
+            builder.setCredentials(new ProfileCredentialsProvider(connectorConfig.getS3ProfileNameConfig()));
         }
+        builder.withClientConfiguration(clientConfiguration);
         return builder.build();
     }
 
@@ -67,6 +73,42 @@ public class AmazonS3Utils {
                 }
             }
         }
+    }
+
+    private static ClientConfiguration newClientConfiguration(AbstractBaseConnectorConfig config) {
+        String version = String.format(VERSION_FORMAT, Version.getVersion());
+
+        ClientConfiguration clientConfiguration = PredefinedClientConfigurations.defaultConfig();
+        clientConfiguration.withUserAgentPrefix(version)
+                .withRetryPolicy(newFullJitterRetryPolicy(config));
+        if (StringUtils.isNotBlank(config.getString(S3_PROXY_URL_CONFIG))) {
+            S3ProxyConfig proxyConfig = new S3ProxyConfig(config);
+            clientConfiguration.withProtocol(proxyConfig.protocol())
+                    .withProxyHost(proxyConfig.host())
+                    .withProxyPort(proxyConfig.port())
+                    .withProxyUsername(proxyConfig.user())
+                    .withProxyPassword(proxyConfig.pass());
+        }
+        clientConfiguration.withUseExpectContinue(config.useExpectContinue());
+
+        return clientConfiguration;
+    }
+
+    private static RetryPolicy newFullJitterRetryPolicy(AbstractBaseConnectorConfig config) {
+
+        PredefinedBackoffStrategies.FullJitterBackoffStrategy backoffStrategy =
+                new PredefinedBackoffStrategies.FullJitterBackoffStrategy(
+                        config.getLong(S3_RETRY_BACKOFF_CONFIG).intValue(),
+                        S3_RETRY_MAX_BACKOFF_TIME_MS
+                );
+
+        RetryPolicy retryPolicy = new RetryPolicy(
+                PredefinedRetryPolicies.DEFAULT_RETRY_CONDITION,
+                backoffStrategy,
+                config.getS3PartRetries(),
+                false
+        );
+        return retryPolicy;
     }
 
 

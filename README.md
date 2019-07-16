@@ -59,7 +59,6 @@ curl -X PUT http://localhost:8084/connectors/backup/config \
 	     "s3.bucket.name":"TBD", 
 	     "s3.region":"eu-central-1", 
 	     "s3.proxy.url": "TBD", 
-	     "s3.proxy.port": "TBD",
 	     "tasks.max":"1"
      }'
 ```
@@ -95,7 +94,6 @@ curl -X PUT http://localhost:8084/connectors/backup-activate/config
         "s3.bucket.name": "TBD", 
         "s3.region": "TBD", 
         "s3.proxy.url": "TBD", 
-        "s3.proxy.port": "TBD", 
         "compacted.log.backup.initial.status":"ACTIVATE", 
         "tasks.max":"1",
         "compacted.log.backup.length.hours":"1",
@@ -115,7 +113,6 @@ curl -X PUT http://localhost:8084/connectors/backup-passivate/config
         "s3.bucket.name": "TBD", 
         "s3.region": "TBD", 
         "s3.proxy.url": "TBD", 
-        "s3.proxy.port": "TBD", 
         "compacted.log.backup.initial.status":"PASSIVATE", 
         "tasks.max":"1",
         "compacted.log.backup.length.hours":"1",
@@ -144,7 +141,6 @@ curl -X PUT http://localhost:8084/connectors/source-restore/config \
      	"key.converter":"org.apache.kafka.connect.converters.ByteArrayConverter", 
      	"s3.proxy.url": "TBD", 
      	"s3.bucket.name":"TBD", 
-     	"s3.proxy.port": "TBD", 
      	"topics":"test-topic"
      	}'
 ```
@@ -160,8 +156,7 @@ curl -X PUT http://localhost:8084/connectors/source-restore/config \
         "value.converter": "org.apache.kafka.connect.converters.ByteArrayConverter", 
         "key.converter":"org.apache.kafka.connect.converters.ByteArrayConverter", 
         "s3.proxy.url": "TBD", 
-        "s3.bucket.name":"TBD", 
-        "s3.proxy.port": "TBD", 
+        "s3.bucket.name":"TBD",  
         "topics":"test-topic:new-topic"}'
 ```
 
@@ -178,7 +173,6 @@ curl -X PUT http://localhost:8084/connectors/source-restore/config \
         "key.converter":"org.apache.kafka.connect.converters.ByteArrayConverter", 
         "s3.proxy.url": "TBD", 
         "s3.bucket.name":"TBD", 
-        "s3.proxy.port": "TBD", 
         "topics":"test-topic:new-topic,test-topic1:new-topic1,test-topic2:new-topic2"}'
 ```
 

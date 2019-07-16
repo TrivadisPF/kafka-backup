@@ -14,6 +14,7 @@ public interface Constants {
     public static final String S3_KEY_SEPARATOR = "/";
     public static final String DASH_KEY_SEPARATOR = "-";
 
+    public static final String KEY_HEADER_OLD_OFFSET = "x-old-offset";
     public static final String KEY_HEADER_RESTORED = "x-restored";
     public static final String KEY_HEADER_RECOVER = "x-recover";
 

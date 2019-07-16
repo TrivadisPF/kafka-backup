@@ -1,6 +1,7 @@
 package ch.tbd.kafka.backuprestore.common.kafkaconnect;
 
 import ch.tbd.kafka.backuprestore.config.ComposableConfig;
+import com.amazonaws.ClientConfiguration;
 import com.amazonaws.regions.RegionUtils;
 import com.amazonaws.regions.Regions;
 import com.amazonaws.services.s3.model.CannedAccessControlList;
@@ -17,6 +18,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.*;
+import java.util.concurrent.TimeUnit;
+
+import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 
 /**
  * Class AbstractBaseConnectorConfig.
@@ -66,12 +70,6 @@ public abstract class AbstractBaseConnectorConfig extends AbstractConfig impleme
     private static final String S3_PROXY_URL_DEFAULT = "";
     private static final String S3_PROXY_URL_DISPLAY = "S3 Proxy URL Settings";
 
-    public static final String S3_PROXY_PORT_CONFIG = "s3.proxy.port";
-    private static final String S3_PROXY_PORT_DOC = "S3 Proxy settings encoded in URL syntax. This property is meant to be used only if you"
-            + " need to access S3 through a proxy.";
-    private static final int S3_PROXY_PORT_DEFAULT = 0;
-    private static final String S3_PROXY_PORT_DISPLAY = "S3 Proxy Port Settings";
-
     public static final String S3_PROXY_USER_CONFIG = "s3.proxy.user";
     private static final String S3_PROXY_USER_DOC = "S3 Proxy User. This property is meant to be used only if you"
             + " need to access S3 through a proxy. Using ``"
@@ -99,6 +97,19 @@ public abstract class AbstractBaseConnectorConfig extends AbstractConfig impleme
 
     public static final String WAN_MODE_CONFIG = "s3.wan.mode";
     private static final boolean WAN_MODE_DEFAULT = false;
+
+    public static final int S3_RETRY_MAX_BACKOFF_TIME_MS = (int) TimeUnit.HOURS.toMillis(24);
+
+    public static final String S3_RETRY_BACKOFF_CONFIG = "s3.retry.backoff.ms";
+    public static final int S3_RETRY_BACKOFF_DEFAULT = 200;
+
+    public static final String S3_PART_RETRIES_CONFIG = "s3.part.retries";
+    public static final int S3_PART_RETRIES_DEFAULT = 3;
+
+    public static final String HEADERS_USE_EXPECT_CONTINUE_CONFIG =
+            "s3.http.send.expect.continue";
+    public static final boolean HEADERS_USE_EXPECT_CONTINUE_DEFAULT =
+            ClientConfiguration.DEFAULT_USE_EXPECT_CONTINUE;
 
 
     protected AbstractBaseConnectorConfig(ConfigDef conf, Map<String, String> props) {
@@ -211,18 +222,6 @@ public abstract class AbstractBaseConnectorConfig extends AbstractConfig impleme
         );
 
         configDef.define(
-                S3_PROXY_PORT_CONFIG,
-                ConfigDef.Type.INT,
-                S3_PROXY_PORT_DEFAULT,
-                Importance.LOW,
-                S3_PROXY_PORT_DOC,
-                group,
-                ++orderInGroup,
-                Width.LONG,
-                S3_PROXY_PORT_DISPLAY
-        );
-
-        configDef.define(
                 S3_PROXY_USER_CONFIG,
                 ConfigDef.Type.STRING,
                 S3_PROXY_USER_DEFAULT,
@@ -272,6 +271,54 @@ public abstract class AbstractBaseConnectorConfig extends AbstractConfig impleme
                 "S3 accelerated endpoint enabled"
         );
 
+        configDef.define(
+                S3_RETRY_BACKOFF_CONFIG,
+                Type.LONG,
+                S3_RETRY_BACKOFF_DEFAULT,
+                atLeast(0L),
+                Importance.LOW,
+                "How long to wait in milliseconds before attempting the first retry "
+                        + "of a failed S3 request. Upon a failure, this connector may wait up to twice as "
+                        + "long as the previous wait, up to the maximum number of retries. "
+                        + "This avoids retrying in a tight loop under failure scenarios.",
+                group,
+                ++orderInGroup,
+                Width.SHORT,
+                "Retry Backoff (ms)"
+        );
+
+        configDef.define(
+                S3_PART_RETRIES_CONFIG,
+                Type.INT,
+                S3_PART_RETRIES_DEFAULT,
+                atLeast(0),
+                Importance.MEDIUM,
+                "Maximum number of retry attempts for failed requests. Zero means no retries. "
+                        + "The actual number of attempts is determined by the S3 client based on multiple "
+                        + "factors, including, but not limited to - "
+                        + "the value of this parameter, type of exception occurred, "
+                        + "throttling settings of the underlying S3 client, etc.",
+                group,
+                ++orderInGroup,
+                Width.LONG,
+                "S3 Part Upload Retries"
+        );
+
+        configDef.define(
+                HEADERS_USE_EXPECT_CONTINUE_CONFIG,
+                Type.BOOLEAN,
+                HEADERS_USE_EXPECT_CONTINUE_DEFAULT,
+                Importance.LOW,
+                "Enable/disable use of the HTTP/1.1 handshake using EXPECT: 100-CONTINUE during "
+                        + "multi-part upload. If true, the client will wait for a 100 (CONTINUE) response "
+                        + "before sending the request body. Else, the client uploads the entire request "
+                        + "body without checking if the server is willing to accept the request.",
+                group,
+                ++orderInGroup,
+                Width.SHORT,
+                "S3 HTTP Send Uses Expect Continue"
+        );
+
         return configDef;
     }
 
@@ -299,16 +346,16 @@ public abstract class AbstractBaseConnectorConfig extends AbstractConfig impleme
         return CannedAclValidator.ACLS_BY_HEADER_VALUE.get(getString(ACL_CANNED_CONFIG));
     }
 
-    public String getProxyUrlConfig() {
-        return getString(S3_PROXY_URL_CONFIG);
-    }
-
-    public int getProxyPortConfig() {
-        return getInt(S3_PROXY_PORT_CONFIG);
-    }
-
     public String getRegionConfig() {
         return getString(S3_REGION_CONFIG);
+    }
+
+    public int getS3PartRetries() {
+        return getInt(S3_PART_RETRIES_CONFIG);
+    }
+
+    public boolean useExpectContinue() {
+        return getBoolean(HEADERS_USE_EXPECT_CONTINUE_CONFIG);
     }
 
     private static class RegionRecommender implements ConfigDef.Recommender {

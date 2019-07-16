@@ -2,7 +2,6 @@ package ch.tbd.kafka.backuprestore.backup.kafkaconnect.config;
 
 import ch.tbd.kafka.backuprestore.backup.storage.CompressionType;
 import ch.tbd.kafka.backuprestore.common.kafkaconnect.AbstractBaseConnectorConfig;
-import com.amazonaws.ClientConfiguration;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
@@ -15,8 +14,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-
-import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 
 /**
  * Class BackupSinkConnectorConfig.
@@ -32,18 +29,6 @@ public class BackupSinkConnectorConfig extends AbstractBaseConnectorConfig {
 
     private static final String COMPRESSION_TYPE_CONFIG = "s3.compression.type";
     private static final String COMPRESSION_TYPE_DEFAULT = "none";
-
-    public static final String S3_PART_RETRIES_CONFIG = "s3.part.retries";
-    public static final int S3_PART_RETRIES_DEFAULT = 3;
-
-    public static final String S3_RETRY_BACKOFF_CONFIG = "s3.retry.backoff.ms";
-    private static final int S3_RETRY_BACKOFF_DEFAULT = 200;
-    private static final String S3_RETRY_BACKOFF_DISPLAY = "Retry Backoff (ms)";
-
-    public static final String HEADERS_USE_EXPECT_CONTINUE_CONFIG =
-            "s3.http.send.expect.continue";
-    public static final boolean HEADERS_USE_EXPECT_CONTINUE_DEFAULT =
-            ClientConfiguration.DEFAULT_USE_EXPECT_CONTINUE;
 
     private static final String FLUSH_SIZE_CONFIG = "flush.size";
     private static final String FLUSH_SIZE_DOC =
@@ -66,7 +51,7 @@ public class BackupSinkConnectorConfig extends AbstractBaseConnectorConfig {
             "The retry backoff in milliseconds. This config is used to notify Kafka connect to retry "
                     + "delivering a message batch or performing recovery in case of transient exceptions.";
     private static final long RETRY_BACKOFF_DEFAULT = 5000L;
-    private static final String RETRY_BACKOFF_DISPLAY = S3_RETRY_BACKOFF_DISPLAY;
+    private static final String RETRY_BACKOFF_DISPLAY = "Retry Backoff (ms)";
 
     private static final String FILENAME_OFFSET_ZERO_PAD_WIDTH_CONFIG =
             "filename.offset.zero.pad.width";
@@ -165,54 +150,6 @@ public class BackupSinkConnectorConfig extends AbstractBaseConnectorConfig {
         );
 
         configDef.define(
-                S3_PART_RETRIES_CONFIG,
-                Type.INT,
-                S3_PART_RETRIES_DEFAULT,
-                atLeast(0),
-                Importance.MEDIUM,
-                "Maximum number of retry attempts for failed requests. Zero means no retries. "
-                        + "The actual number of attempts is determined by the S3 client based on multiple "
-                        + "factors, including, but not limited to - "
-                        + "the value of this parameter, type of exception occurred, "
-                        + "throttling settings of the underlying S3 client, etc.",
-                group,
-                ++orderInGroup,
-                Width.LONG,
-                "S3 Part Upload Retries"
-        );
-
-        configDef.define(
-                S3_RETRY_BACKOFF_CONFIG,
-                Type.LONG,
-                S3_RETRY_BACKOFF_DEFAULT,
-                atLeast(0L),
-                Importance.LOW,
-                "How long to wait in milliseconds before attempting the first retry "
-                        + "of a failed S3 request. Upon a failure, this connector may wait up to twice as "
-                        + "long as the previous wait, up to the maximum number of retries. "
-                        + "This avoids retrying in a tight loop under failure scenarios.",
-                group,
-                ++orderInGroup,
-                Width.SHORT,
-                S3_RETRY_BACKOFF_DISPLAY
-        );
-
-        configDef.define(
-                HEADERS_USE_EXPECT_CONTINUE_CONFIG,
-                Type.BOOLEAN,
-                HEADERS_USE_EXPECT_CONTINUE_DEFAULT,
-                Importance.LOW,
-                "Enable/disable use of the HTTP/1.1 handshake using EXPECT: 100-CONTINUE during "
-                        + "multi-part upload. If true, the client will wait for a 100 (CONTINUE) response "
-                        + "before sending the request body. Else, the client uploads the entire request "
-                        + "body without checking if the server is willing to accept the request.",
-                group,
-                ++orderInGroup,
-                Width.SHORT,
-                "S3 HTTP Send Uses Expect Continue"
-        );
-
-        configDef.define(
                 FLUSH_SIZE_CONFIG,
                 Type.INT,
                 Importance.HIGH,
@@ -300,14 +237,6 @@ public class BackupSinkConnectorConfig extends AbstractBaseConnectorConfig {
 
     public long getRetryBackoffDefault() {
         return getLong(RETRY_BACKOFF_CONFIG);
-    }
-
-    public int getS3PartRetries() {
-        return getInt(S3_PART_RETRIES_CONFIG);
-    }
-
-    public boolean useExpectContinue() {
-        return getBoolean(HEADERS_USE_EXPECT_CONTINUE_CONFIG);
     }
 
     public int getS3RetentionInDays() {
