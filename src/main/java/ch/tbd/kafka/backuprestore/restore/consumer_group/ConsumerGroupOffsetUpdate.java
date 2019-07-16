@@ -46,7 +46,7 @@ public class ConsumerGroupOffsetUpdate {
             logger.error("   1 -> Properties file wich contains the data to open connection");
             logger.error("   2 -> TOPIC_NAME (old_topic_name:new_topic_name - new_topic_name is optional in case the topic have the same name)");
             logger.error("   3 -> CONSUMER_GROUP_NAME - Insert the consumer group to update");
-            logger.error("   4 -> Map Partition-Offset (0:100) - This parameter is optional");
+            logger.error("   4 -> Map Partition-Offset (0:100,1:10,...) - This parameter is optional");
             System.exit(-1);
         }
 
