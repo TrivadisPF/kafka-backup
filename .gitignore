@@ -6,3 +6,5 @@ target/**
 .idea
 doc/ppt/~$kafka-backup-V1.0.pptx
 *.iml
+util/kafka-backup-perftest/.settings/org.eclipse.jdt.core.prefs
+util/kafka-backup-perftest/.settings/org.springframework.ide.eclipse.prefs
