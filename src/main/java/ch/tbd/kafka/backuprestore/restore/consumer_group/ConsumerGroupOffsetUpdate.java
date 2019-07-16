@@ -7,7 +7,6 @@ import org.apache.kafka.clients.admin.ConsumerGroupListing;
 import org.apache.kafka.clients.admin.ListConsumerGroupOffsetsResult;
 import org.apache.kafka.clients.admin.ListConsumerGroupsResult;
 import org.apache.kafka.clients.consumer.*;
-import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.SaslConfigs;
@@ -45,8 +44,9 @@ public class ConsumerGroupOffsetUpdate {
         if (args.length < 3) {
             logger.error("Please insert the following data:");
             logger.error("   1 -> Properties file wich contains the data to open connection");
-            logger.error("   2 -> TOPIC_NAME (old_topic_name:new_topic_name,old_topic_name1 - new_topic_name is optional in case the topic have the same name)");
+            logger.error("   2 -> TOPIC_NAME (old_topic_name:new_topic_name - new_topic_name is optional in case the topic have the same name)");
             logger.error("   3 -> CONSUMER_GROUP_NAME - Insert the consumer group to update");
+            logger.error("   4 -> Map Partition-Offset (0:100) - This parameter is optional");
             System.exit(-1);
         }
 
@@ -73,117 +73,153 @@ public class ConsumerGroupOffsetUpdate {
             }
         }
 
-        String topics = args[1];
+        String topic = args[1];
         String consumerGroupName = args[2];
-        String[] listTopic = topics.split(",");
-        for (String topic : listTopic) {
-            String oldTopic = null;
-            String newTopic = null;
-            if (topic.indexOf(":") > -1) {
-                oldTopic = topic.split(":")[0];
-                newTopic = topic.split(":")[1];
-            } else {
-                oldTopic = topic;
-                newTopic = topic;
-            }
-            ConfigurationConsumerGroupOffset configuration =
-                    ConfigurationConsumerGroupOffset.createConfigurationConsumerGroupOffset(oldTopic, newTopic, consumerGroupName);
-            logger.info("Configuration for Old Topic >{}< - New Topic >{}< - Consumer group >{}<", configuration.getOldTopicName(), configuration.getNewTopicName(), configuration.getConsumerGroup());
+        String oldTopic = null;
+        String newTopic = null;
+        if (topic.indexOf(":") > -1) {
+            oldTopic = topic.split(":")[0];
+            newTopic = topic.split(":")[1];
+        } else {
+            oldTopic = topic;
+            newTopic = topic;
+        }
+        ConfigurationConsumerGroupOffset configuration =
+                ConfigurationConsumerGroupOffset.createConfigurationConsumerGroupOffset(oldTopic, newTopic, consumerGroupName);
+        logger.info("Configuration for Old Topic >{}< - New Topic >{}< - Consumer group >{}<", configuration.getOldTopicName(), configuration.getNewTopicName(), configuration.getConsumerGroup());
 
-            try (AdminClient adminClient = AdminClient.create(createPropertiesAdminClient())) {
+        if (args.length == 3) {
+            extractOffset(configuration);
+        } else if (args.length == 4) {
+            setPartitionOffset(configuration, args[3]);
+        } else {
+            throw new IllegalArgumentException("Please configure correctly the input data");
+        }
 
-                ListConsumerGroupsResult result = adminClient.listConsumerGroups();
-                try {
-                    Collection<ConsumerGroupListing> collectionConsumerGroupListing = result.all().get();
-                    collectionConsumerGroupListing.stream().forEach(a -> {
-                        if (a.groupId().equalsIgnoreCase(configuration.getConsumerGroup())) {
-                            ListConsumerGroupOffsetsResult offsetsResult = adminClient.listConsumerGroupOffsets(configuration.getConsumerGroup());
-                            try {
-                                Map<TopicPartition, OffsetAndMetadata> mapTopicAndPartitions = offsetsResult.partitionsToOffsetAndMetadata().get();
-                                mapTopicAndPartitions.keySet().stream().filter(topicPartition -> {
-                                    if (topicPartition.topic().equalsIgnoreCase(configuration.getOldTopicName())) {
-                                        return true;
-                                    }
-                                    return false;
-                                }).forEach(topicPartition -> {
-                                    configuration.getMapPartitionOldOffset().put(topicPartition.partition(), mapTopicAndPartitions.get(topicPartition).offset());
-                                });
-                                if (!configuration.getMapPartitionOldOffset().isEmpty()) {
 
-                                    Consumer consumer = new KafkaConsumer(createPropertiesConsumer(configuration.getConsumerGroup() + "_RESTORE"));
-                                    consumer.subscribe(Collections.singletonList(configuration.getNewTopicName()), new ConsumerRebalanceListener() {
-                                        @Override
-                                        public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
-                                        }
+        SimpleHeaderConverter shc = new SimpleHeaderConverter();
+        if (!configuration.getMapPartitionOldOffset().isEmpty()) {
+            try (Consumer consumer = new KafkaConsumer(createPropertiesConsumer(configuration.getConsumerGroup() + "_RESTORE"))) {
+                consumer.subscribe(Collections.singletonList(configuration.getNewTopicName()), new ConsumerRebalanceListener() {
+                    @Override
+                    public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+                    }
 
-                                        @Override
-                                        public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
-                                            consumer.seekToBeginning(partitions);
-                                        }
-                                    });
-                                    int MAX_ATTEMPS = 5;
-                                    int count = 0;
-                                    boolean continueConsumeData = true;
-                                    SimpleHeaderConverter shc = new SimpleHeaderConverter();
-                                    while (continueConsumeData) {
-                                        ConsumerRecords<ByteBuffer, ByteBuffer> consumerRecords = consumer.poll(Duration.ofMillis(1000));
-                                        if (consumerRecords.count() == 0) {
-                                            if (count < MAX_ATTEMPS) {
-                                                count++;
-                                                continueConsumeData = true;
-                                            } else {
-                                                continueConsumeData = false;
-                                            }
-                                            continue;
-                                        }
-                                        for (ConsumerRecord<ByteBuffer, ByteBuffer> record : consumerRecords) {
-                                            int partition = record.partition();
-                                            long newOffset = record.offset();
-                                            if (!configuration.getMapPartitionOldOffset().containsKey(partition)) {
-                                                continue;
-                                            }
-                                            Headers headers = record.headers();
-                                            long oldOffset = -1L;
-                                            for (Header header : headers.toArray()) {
-                                                String key = header.key();
-                                                byte[] value = header.value();
-                                                if (Constants.KEY_HEADER_OLD_OFFSET.equalsIgnoreCase(key)) {
-                                                    SchemaAndValue schemaAndValue = shc.toConnectHeader(record.topic(), Constants.KEY_HEADER_OLD_OFFSET, value);
-                                                    oldOffset = Long.valueOf(String.valueOf(schemaAndValue.value()));
-                                                    configuration.getMapPartitionNewLatestOffset().put(partition, newOffset);
-                                                }
-                                            }
-                                            if (configuration.getMapPartitionOldOffset().containsKey(partition) && configuration.getMapPartitionOldOffset().get(partition) == oldOffset) {
-                                                updateOffsetConsumerGroup(configuration.getNewTopicName(), configuration.getConsumerGroup(), partition, newOffset);
-                                                configuration.getMapPartitionOldOffset().remove(partition);
-                                            }
-                                        }
-                                    }
-                                    if (!configuration.getMapPartitionOldOffset().isEmpty()) {
-                                        Iterator<Integer> partitionsNotUpdated = configuration.getMapPartitionNewLatestOffset().keySet().iterator();
-                                        while (partitionsNotUpdated.hasNext()) {
-                                            int partition = partitionsNotUpdated.next();
-                                            long newOffset = configuration.getMapPartitionNewLatestOffset().get(partition);
-                                            logger.warn("No latest offset found on new topic. Set new offset with the latest record");
-                                            updateOffsetConsumerGroup(configuration.getNewTopicName(), configuration.getConsumerGroup(), partition, newOffset);
-                                        }
-                                    }
-                                }
-                            } catch (ExecutionException e) {
-                                logger.error(e.getMessage(), e);
-                            } catch (InterruptedException e) {
-                                logger.error(e.getMessage(), e);
+                    @Override
+                    public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
+                        consumer.seekToBeginning(partitions);
+                    }
+                });
+                int MAX_ATTEMPS = 5;
+                int count = 0;
+                boolean continueConsumeData = true;
+                while (continueConsumeData) {
+                    ConsumerRecords<ByteBuffer, ByteBuffer> consumerRecords = consumer.poll(Duration.ofMillis(1000));
+                    if (consumerRecords.count() == 0) {
+                        if (count < MAX_ATTEMPS) {
+                            count++;
+                            continueConsumeData = true;
+                        } else {
+                            continueConsumeData = false;
+                        }
+                        continue;
+                    }
+                    for (ConsumerRecord<ByteBuffer, ByteBuffer> record : consumerRecords) {
+                        int partition = record.partition();
+                        long newOffset = record.offset();
+                        if (!configuration.getMapPartitionOldOffset().containsKey(partition)) {
+                            continue;
+                        }
+                        Headers headers = record.headers();
+                        long oldOffset = -1L;
+                        for (Header header : headers.toArray()) {
+                            String key = header.key();
+                            byte[] value = header.value();
+                            if (Constants.KEY_HEADER_OLD_OFFSET.equalsIgnoreCase(key)) {
+                                SchemaAndValue schemaAndValue = shc.toConnectHeader(record.topic(), Constants.KEY_HEADER_OLD_OFFSET, value);
+                                oldOffset = Long.valueOf(String.valueOf(schemaAndValue.value()));
+                                configuration.getMapPartitionNewLatestOffset().put(partition, newOffset);
                             }
                         }
-                    });
-                } catch (ExecutionException e) {
-                    logger.error(e.getMessage(), e);
-                } catch (InterruptedException e) {
+                        if (configuration.getMapPartitionOldOffset().containsKey(partition) && configuration.getMapPartitionOldOffset().get(partition) == oldOffset) {
+                            updateOffsetConsumerGroup(configuration.getNewTopicName(), configuration.getConsumerGroup(), partition, newOffset);
+                            configuration.getMapPartitionOldOffset().remove(partition);
+                        }
+                    }
+                }
+                if (!configuration.getMapPartitionOldOffset().isEmpty()) {
+                    Iterator<Integer> partitionsNotUpdated = configuration.getMapPartitionNewLatestOffset().keySet().iterator();
+                    while (partitionsNotUpdated.hasNext()) {
+                        int partition = partitionsNotUpdated.next();
+                        long newOffset = configuration.getMapPartitionNewLatestOffset().get(partition);
+                        logger.warn("No latest offset found on new topic. Set new offset with the latest record");
+                        updateOffsetConsumerGroup(configuration.getNewTopicName(), configuration.getConsumerGroup(), partition, newOffset);
+                    }
+                }
+            } finally {
+                try {
+                    shc.close();
+                } catch (IOException e) {
                     logger.error(e.getMessage(), e);
                 }
-            } catch (KafkaException e) {
+            }
+        }
+    }
+
+    private void setPartitionOffset(ConfigurationConsumerGroupOffset configuration, String partitionOffset) {
+        if (partitionOffset.indexOf(",") > -1) {
+            String[] object = partitionOffset.split(",");
+            for (String partitionOffsetString : object) {
+                setOffset(configuration, partitionOffsetString);
+            }
+        } else {
+            setOffset(configuration, partitionOffset);
+        }
+    }
+
+    private void setOffset(ConfigurationConsumerGroupOffset configuration, String partitionOffsetString) {
+        if (partitionOffsetString.indexOf(":") == -1) {
+            throw new IllegalArgumentException("Partition-Offset data defined wrong");
+        }
+        String[] array = partitionOffsetString.split(":");
+        Integer partition = Integer.parseInt(array[0]);
+        Long offset = Long.valueOf(array[1]);
+        configuration.getMapPartitionOldOffset().put(partition, offset);
+    }
+
+    private void extractOffset(ConfigurationConsumerGroupOffset configuration) {
+        try (AdminClient adminClient = AdminClient.create(createPropertiesAdminClient())) {
+            ListConsumerGroupsResult result = adminClient.listConsumerGroups();
+            try {
+                Collection<ConsumerGroupListing> collectionConsumerGroupListing = result.all().get();
+                collectionConsumerGroupListing.stream().forEach(a -> {
+                    if (a.groupId().equalsIgnoreCase(configuration.getConsumerGroup())) {
+                        ListConsumerGroupOffsetsResult offsetsResult = adminClient.listConsumerGroupOffsets(configuration.getConsumerGroup());
+                        try {
+                            Map<TopicPartition, OffsetAndMetadata> mapTopicAndPartitions = offsetsResult.partitionsToOffsetAndMetadata().get();
+                            mapTopicAndPartitions.keySet().stream().filter(topicPartition -> {
+                                if (topicPartition.topic().equalsIgnoreCase(configuration.getOldTopicName())) {
+                                    return true;
+                                }
+                                return false;
+                            }).forEach(topicPartition -> {
+                                configuration.getMapPartitionOldOffset().put(topicPartition.partition(), mapTopicAndPartitions.get(topicPartition).offset());
+                            });
+                        } catch (ExecutionException e) {
+                            logger.error(e.getMessage(), e);
+
+                        } catch (InterruptedException e) {
+                            logger.error(e.getMessage(), e);
+                        }
+                    }
+                });
+            } catch (ExecutionException e) {
+                logger.error(e.getMessage(), e);
+            } catch (InterruptedException e) {
                 logger.error(e.getMessage(), e);
             }
+        } catch (KafkaException e) {
+            logger.error(e.getMessage(), e);
         }
     }
 
