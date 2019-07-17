@@ -17,7 +17,9 @@ import java.nio.file.WatchService;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.ExecutionException;
 import java.util.logging.Level;
@@ -33,6 +35,7 @@ import org.apache.commons.cli.Options;
 import org.apache.commons.cli.ParseException;
 import org.apache.kafka.clients.admin.DescribeTopicsResult;
 import org.apache.kafka.clients.admin.KafkaAdminClient;
+import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
@@ -50,6 +53,7 @@ public class KafkaBinaryProducer {
     Integer partitions;
     Path path;
     ByteArrayOutputStream out;
+    Map<Integer, Long> nofMessagesProduced = new HashMap<>();
 
     public KafkaBinaryProducer(CommandLine cmd)  {
         // Read initial configuration
@@ -78,28 +82,37 @@ public class KafkaBinaryProducer {
         producer = new KafkaProducer<>(props);
         
         topic = myConf.getTopic();
-
-        DescribeTopicsResult tr = KafkaAdminClient.create(props).describeTopics(Collections.singletonList(topic));
         
-        TopicDescription td;
-		try {
-			td = tr.values().get(topic).get();
-	        partitions = td.partitions().size();
-		} catch (InterruptedException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		} catch (ExecutionException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		} 
+        if (myConf.isCreateTopic()) {
+        	NewTopic t = new NewTopic(myConf.getTopic(), myConf.getPartitions(), myConf.getReplicationFactor());
+        	KafkaAdminClient.create(props).createTopics(Collections.singleton(t));
+        	partitions = myConf.getPartitions();	
+        } else { 
+        	DescribeTopicsResult tr = KafkaAdminClient.create(props).describeTopics(Collections.singletonList(topic));
+
+        	TopicDescription td;
+    		try {
+    			td = tr.values().get(topic).get();
+    	        partitions = td.partitions().size();
+    		} catch (InterruptedException e) {
+    			// TODO Auto-generated catch block
+    			e.printStackTrace();
+    		} catch (ExecutionException e) {
+    			// TODO Auto-generated catch block
+    			e.printStackTrace();
+    		} 
+        }
+        
         
         watchDir = myConf.getWatchDir();
         path = FileSystems.getDefault().getPath(watchDir);
         
-
+        for (int i = 0; i < partitions; i++) {
+        	nofMessagesProduced.put(i, 0L);
+        }
     }
 
-    // Takes a whole binary file content and splits it into 10k chunks
+    // Takes a whole binary file content and splits it into message size chunks
     private ArrayList splitFile(String name, byte[] datum) {
         int i, l = datum.length;
         int block = myConf.getMessageSize().intValue();
@@ -156,11 +169,31 @@ public class KafkaBinaryProducer {
                     fileData = Files
                             .readAllBytes(FileSystems.getDefault().getPath(watchDir + File.separator + fileName));
                     allChunks = splitFile(fileName, fileData);
-                    for (int i = 0; i < allChunks.size(); i++) {
-                        publishMessage(fileName, (allChunks.get(i)), partitionSelector.nextPartition());
-                    }
-                    System.out.println("Published file " + fileName);
-
+                    int totalMessageCount = 0;
+                    boolean repeat = true;
+                    do {
+                        for (int i = 0; i < allChunks.size()-1; i++) {
+                        	if (allChunks.get(i).length == myConf.getMessageSize().intValue() ) {
+                        		publishMessage(fileName, (allChunks.get(i)), partitionSelector.nextPartition());
+                        		totalMessageCount++;
+                        		if (totalMessageCount >= myConf.getNumberOfMessages() && myConf.getNumberOfMessages() != -1) {
+                        			repeat = false;
+                        			break;
+                        		}
+                        		if (totalMessageCount % 10000 == 0) {
+                        			System.out.println("Published 10000 messages to topic " + topic + " ....");
+                        		}
+                        			
+                        	}
+                        }
+                        if (myConf.getNumberOfMessages() == -1) {
+                        	repeat = false;
+                        }
+                    } while (repeat);
+                    
+                    System.out.println("Finished publishing!");
+                    System.out.println("A total of " + totalMessageCount + " messages have been sent to topic " + topic);
+                    
                 }
             }
             key.reset();
@@ -170,9 +203,10 @@ public class KafkaBinaryProducer {
     private void publishMessage(String key, byte[] bytes, int partition) {
         ProducerRecord<String, byte[]> data = new ProducerRecord<>(topic, partition, key, bytes);
         Headers headers = data.headers();
-        headers.add("message.number", "1".getBytes());
+        nofMessagesProduced.put(partition, nofMessagesProduced.get(partition)+1);
+        headers.add("message.number", nofMessagesProduced.get(partition).toString().getBytes());
         producer.send(data);
-        System.out.println("publishing message of size " + bytes.length + " to partition " + partition);
+        //System.out.println("publishing message of size " + bytes.length + " to partition " + partition);
     }
 
     public static void main(String args[]) {
@@ -183,19 +217,45 @@ public class KafkaBinaryProducer {
         options.addOption(Option.builder("b")
         								.longOpt("bootstrapServers")
         								.hasArg()
-        								.desc("boostrap Server")
+        								.desc("Bootstrap broker(s) (host[:port])")
 //        								.required()
         								.build());
         options.addOption(Option.builder("t")
         								.longOpt("topic")
 										.hasArg()
-										.desc("the topic to write to")
+										.desc("Topic to write messages to")
 //										.required()
 										.build());
+        
+        options.addOption(Option.builder("c")
+				.longOpt("create")
+				.hasArg()
+				.desc("Create Kafka topic before producing data")
+//				.required()
+				.build());
+
+        options.addOption(Option.builder("c")
+				.longOpt("create")
+				.hasArg(false)
+				.desc("Create Kafka topic before producing data")
+				.build());
+        
+        options.addOption(Option.builder("r")
+				.longOpt("replicationFactor")
+				.hasArg(true)
+				.desc("Replication Factor, only needed when topic should be created before running (-c)")
+				.build());
+
+        options.addOption(Option.builder("p")
+				.longOpt("partitions")
+				.hasArg(true)
+				.desc("Number of Partitions, only needed when topic should be created before running (-c)")
+				.build());    
+        
         options.addOption(Option.builder("w")
 				.longOpt("watchDir")
 				.hasArg()
-				.desc("read the config from the file")
+				.desc("Folder to watch on local filesystem for new files to be used as data")
 				.build());
         		
         options.addOption(Option.builder("f")
@@ -207,22 +267,26 @@ public class KafkaBinaryProducer {
         options.addOption(Option.builder("h")
 				.longOpt("help")
 				.hasArg(false)
-				.desc("show help")
+				.desc("Print Usage help")
 				.build());
 
         options.addOption(Option.builder("s")
 				.longOpt("messageSize")
 				.hasArg()
-				.desc("the message size to produce")
+				.desc("The size of the message to produce, use KB or MB to specify the unit")
 				.build());
 
         options.addOption(Option.builder("d")
 				.longOpt("partitionDistribution")
 				.hasArg()
-				.desc("the distribution over partitions, if not set then it is equally distributed. Otherwise pass the number of messages per partition as a list of integers")
+				.desc("Distribution over partitions, if not set then it is equally distributed. Otherwise pass the number of messages per partition as a list of integers")
 				.build());
-
         
+        options.addOption(Option.builder("n")
+				.longOpt("numberOfMessages")
+				.hasArg()
+				.desc("Number of messages to produce in total over all partitions")
+				.build());
         
         HelpFormatter formatter = new HelpFormatter();
         
@@ -260,6 +324,10 @@ class Config {
     private String bootstrapServers;
     private String watchDir;
     private Long messageSize;
+    private Long numberOfMessages;
+    private int partitions = 1;
+    private short replicationFactor = 1;
+    private boolean createTopic = true;
     private List<String> partitionDistribution = new ArrayList<>();
     
     public Config(String filePath) throws FileNotFoundException, IOException {
@@ -274,11 +342,16 @@ class Config {
                 	this.bootstrapServers = vals[1];
                 } else if (vals[0].equals("topic")) {
                 	this.topic = vals[1];
-                } else if (vals[0].equals("watchdir")) {
+                } else if (vals[0].equals("watch.dir")) {
                 	this.watchDir = vals[1];
-                } else if (vals[0].equals("messageSize")) {
+                } else if (vals[0].equals("message.size")) {
                 	this.messageSize = new Long(vals[1]);
-                }
+                } else if (vals[0].equals("message.count")) {
+                	this.numberOfMessages = new Long(vals[1]);
+                } else if (vals[0].equals("partition.distribution")) {
+            	    String[] partitonDistributionArr = vals[1].split(",");
+            		partitionDistribution = Arrays.asList(partitonDistributionArr);
+                }            
             }
             line = br.readLine();
         }
@@ -300,6 +373,21 @@ class Config {
     	} else {
     		watchDir = "/tmp";
     	}
+    	
+    	// should a topic be created
+    	createTopic = (cmd.hasOption("c"));
+    	if (cmd.hasOption("r")) {
+    		replicationFactor = Short.valueOf(cmd.getOptionValue("r"));
+    	}    	
+    	if (cmd.hasOption("p")) {
+    		partitions = Integer.valueOf(cmd.getOptionValue("p"));
+    	}    	
+    	
+    	if (cmd.hasOption("n")) {
+    		numberOfMessages = Long.valueOf(cmd.getOptionValue("n"));
+    	} else {
+    		numberOfMessages = -1L;
+    	}    	
     	if (cmd.hasOption("d")) {
     		String partitionDistributionStr = cmd.getOptionValue("d");
     		String[] partitonDistributionArr = partitionDistributionStr.split(",");
@@ -323,8 +411,24 @@ class Config {
 		return messageSize;
 	}
 
+	public Long getNumberOfMessages() {
+		return numberOfMessages;
+	}
+
 	public List<String> getPartitionDistribution() {
 		return partitionDistribution;
+	}
+
+	public int getPartitions() {
+		return partitions;
+	}
+
+	public short getReplicationFactor() {
+		return replicationFactor;
+	}
+
+	public boolean isCreateTopic() {
+		return createTopic;
 	}
 
 }
