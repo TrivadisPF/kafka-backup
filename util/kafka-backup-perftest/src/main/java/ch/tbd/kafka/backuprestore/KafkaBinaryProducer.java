@@ -348,6 +348,14 @@ class Config {
                 	this.messageSize = new Long(vals[1]);
                 } else if (vals[0].equals("message.count")) {
                 	this.numberOfMessages = new Long(vals[1]);
+                } else if (vals[0].equals("create.topic")) {
+                	this.createTopic = new Boolean(vals[1]);
+                } else if (vals[0].equals("replication.factor")) {
+                	this.replicationFactor = new Short(vals[1]);
+                } else if (vals[0].equals("partitions")) {
+                	this.partitions = new Integer(vals[1]);
+                } else if (vals[0].equals("message.count")) {
+                	this.numberOfMessages = new Long(vals[1]);
                 } else if (vals[0].equals("partition.distribution")) {
             	    String[] partitonDistributionArr = vals[1].split(",");
             		partitionDistribution = Arrays.asList(partitonDistributionArr);
