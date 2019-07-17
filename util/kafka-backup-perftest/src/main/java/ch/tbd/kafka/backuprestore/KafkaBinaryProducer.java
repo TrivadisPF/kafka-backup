@@ -243,19 +243,19 @@ public class KafkaBinaryProducer {
         options.addOption(Option.builder("r")
 				.longOpt("replicationFactor")
 				.hasArg(true)
-				.desc("Replication Factor, only needed when topic should be created before running (-c)")
+				.desc("Replication Factor, only needed when topic should be created before running (-c). Defaults to 1.")
 				.build());
 
         options.addOption(Option.builder("p")
 				.longOpt("partitions")
 				.hasArg(true)
-				.desc("Number of Partitions, only needed when topic should be created before running (-c)")
+				.desc("Number of Partitions, only needed when topic should be created before running (-c). Defaults to 1.")
 				.build());    
         
         options.addOption(Option.builder("w")
 				.longOpt("watchDir")
 				.hasArg()
-				.desc("Folder to watch on local filesystem for new files to be used as data")
+				.desc("Folder to watch on local filesystem for new files to be used as data. Defaults to /tmp")
 				.build());
         		
         options.addOption(Option.builder("f")
