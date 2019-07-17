@@ -37,7 +37,7 @@ usage: KafkaBinaryProducer
                                     use KB or MB to specify the unit
  -t,--topic <arg>                   Topic to write messages to
  -w,--watchDir <arg>                Folder to watch on local filesystem
-                                    for new files to be used as data
+                                    for new files to be used as data. Defaults to /tmp
 ```
 
 The CLI can either use a topic which is already existing or by using the `-c` option you can let the CLI create the topic before producing the messages. 
@@ -59,6 +59,8 @@ To create a file of size 100MB with random content, you can use the following co
 ```
 dd if=/dev/urandom of=file.txt bs=1048576 count=100
 ```
+
+Make sure that you place the file into the watch folder, specified when running the CLI.
 
 ## Examples
 
