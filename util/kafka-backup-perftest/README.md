@@ -2,6 +2,14 @@
 
 KafkaBinaryProducer is a command line utility that you can use to produce a set of binary messages to a Kafka topic. You can specify the size of the message and the distribution over the partitions of the topic.
 
+## Build
+
+```
+mvn package
+```
+
+## Configuration
+
 You can either use a config file (`-f`) to specify the various options or pass them as different parameters to the CLI. 
 
 Running the CLI without parameter or using the `-h` parameter shows the Usage help
