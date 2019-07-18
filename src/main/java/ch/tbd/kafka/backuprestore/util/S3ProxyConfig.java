@@ -53,6 +53,30 @@ public class S3ProxyConfig {
         }
     }
 
+    public S3ProxyConfig(String proxyUrl, String proxyUser, Password proxyPass) {
+        try {
+            URL url = new URL(proxyUrl);
+            protocol = extractProtocol(url.getProtocol());
+            host = url.getHost();
+            port = url.getPort();
+            String username = proxyUser;
+            user = StringUtils.isNotBlank(username)
+                    ? username
+                    : extractUser(url.getUserInfo());
+            Password password = proxyPass;
+            pass = StringUtils.isNotBlank(password.value())
+                    ? password.value()
+                    : extractPass(url.getUserInfo());
+            log.debug("Using proxy config {}", this);
+        } catch (MalformedURLException e) {
+            throw new ConfigException(
+                    S3_PROXY_URL_CONFIG,
+                    proxyUrl,
+                    e.toString()
+            );
+        }
+    }
+
     public static Protocol extractProtocol(String protocol) {
         if (StringUtils.isBlank(protocol)) {
             return Protocol.HTTPS;

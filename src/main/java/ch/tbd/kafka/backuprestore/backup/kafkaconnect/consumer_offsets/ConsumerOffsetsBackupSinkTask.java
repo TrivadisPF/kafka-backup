@@ -1,7 +1,10 @@
-package ch.tbd.kafka.backuprestore.backup.kafkaconnect;
+package ch.tbd.kafka.backuprestore.backup.kafkaconnect.consumer_offsets;
 
-import ch.tbd.kafka.backuprestore.backup.kafkaconnect.config.BackupSinkConnectorConfig;
+import ch.tbd.kafka.backuprestore.backup.kafkaconnect.consumer_offsets.config.ConsumerOffsetsBackupSinkConnectorConfig;
 import ch.tbd.kafka.backuprestore.backup.storage.partitioner.TopicPartitionWriter;
+import ch.tbd.kafka.backuprestore.restore.consumer_group.KeyConsumerGroup;
+import ch.tbd.kafka.backuprestore.restore.consumer_group.ValueConsumerGroup;
+import ch.tbd.kafka.backuprestore.util.ConsumerOffsetsUtils;
 import ch.tbd.kafka.backuprestore.util.Version;
 import io.confluent.connect.storage.partitioner.DefaultPartitioner;
 import io.confluent.connect.storage.partitioner.Partitioner;
@@ -15,12 +18,13 @@ import org.apache.kafka.connect.sink.SinkTaskContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.nio.ByteBuffer;
 import java.util.*;
 
-public class BackupSinkTask extends SinkTask {
+public class ConsumerOffsetsBackupSinkTask extends SinkTask {
 
-    private static final Logger logger = LoggerFactory.getLogger(BackupSinkTask.class);
-    private BackupSinkConnectorConfig connectorConfig;
+    private static final Logger logger = LoggerFactory.getLogger(ConsumerOffsetsBackupSinkTask.class);
+    private ConsumerOffsetsBackupSinkConnectorConfig connectorConfig;
     private final Set<TopicPartition> assignment;
     private final Map<TopicPartition, TopicPartitionWriter> topicPartitionWriters;
     private final Time time;
@@ -29,7 +33,7 @@ public class BackupSinkTask extends SinkTask {
     /**
      * No-arg constructor. Used by Connect framework.
      */
-    public BackupSinkTask() {
+    public ConsumerOffsetsBackupSinkTask() {
         // no-arg constructor required by Connect framework.
         assignment = new HashSet<>();
         topicPartitionWriters = new HashMap<>();
@@ -37,8 +41,8 @@ public class BackupSinkTask extends SinkTask {
     }
 
     // visible for testing.
-    BackupSinkTask(BackupSinkConnectorConfig connectorConfig, SinkTaskContext context,
-                   Time time, Partitioner<?> partitioner) {
+    ConsumerOffsetsBackupSinkTask(ConsumerOffsetsBackupSinkConnectorConfig connectorConfig, SinkTaskContext context,
+                                  Time time, Partitioner<?> partitioner) {
         this.assignment = new HashSet<>();
         this.topicPartitionWriters = new HashMap<>();
         this.connectorConfig = connectorConfig;
@@ -49,7 +53,7 @@ public class BackupSinkTask extends SinkTask {
     }
 
     public void start(Map<String, String> props) {
-        connectorConfig = new BackupSinkConnectorConfig(props);
+        connectorConfig = new ConsumerOffsetsBackupSinkConnectorConfig(props);
         partitioner = new DefaultPartitioner<>();
     }
 
@@ -67,16 +71,33 @@ public class BackupSinkTask extends SinkTask {
     @Override
     public void put(Collection<SinkRecord> records) {
         for (SinkRecord record : records) {
-            String topic = record.topic();
-            int partition = record.kafkaPartition();
-            TopicPartition tp = new TopicPartition(topic, partition);
-            topicPartitionWriters.get(tp).buffer(record);
+            Object key = record.key();
+            Object value = record.value();
+            if (addingRecordToBackup(key, value)) {
+                String topic = record.topic();
+                int partition = record.kafkaPartition();
+                TopicPartition tp = new TopicPartition(topic, partition);
+                topicPartitionWriters.get(tp).buffer(record);
+            }
         }
 
         for (TopicPartition tp : assignment) {
             topicPartitionWriters.get(tp).write();
         }
     }
+
+    private boolean addingRecordToBackup(Object key, Object value) {
+        KeyConsumerGroup keyConsumerGroup = ConsumerOffsetsUtils.readMessageKey(ByteBuffer.wrap((byte[]) key));
+        ValueConsumerGroup valueConsumerGroup = ConsumerOffsetsUtils.readMessageValue(ByteBuffer.wrap((byte[]) value));
+        if (keyConsumerGroup != null
+                && connectorConfig.getConsumerGroupNameExcludeConfig().equalsIgnoreCase(keyConsumerGroup.getGroup())
+                && valueConsumerGroup != null) {
+            //ignore backup
+            return false;
+        }
+        return true;
+    }
+
 
     @Override
     public String version() {

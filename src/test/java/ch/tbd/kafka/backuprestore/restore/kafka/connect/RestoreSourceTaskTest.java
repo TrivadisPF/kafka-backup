@@ -150,9 +150,9 @@ public class RestoreSourceTaskTest extends AbstractTest {
             Assertions.assertNotEquals(0, sourceRecordList.size());
             Assertions.assertEquals(3, sourceRecordList.size());
             Assertions.assertNotNull(sourceRecordList.get(0).headers());
-            Assertions.assertEquals(2, sourceRecordList.get(0).headers().size());
+            Assertions.assertEquals(3, sourceRecordList.get(0).headers().size());
             Assertions.assertNotNull(sourceRecordList.get(0).headers().lastWithName(Constants.KEY_HEADER_RECOVER));
-            Assertions.assertTrue((Boolean) sourceRecordList.get(0).headers().lastWithName(Constants.KEY_HEADER_RECOVER).value());
+            Assertions.assertTrue(Boolean.valueOf((String) sourceRecordList.get(0).headers().lastWithName(Constants.KEY_HEADER_RECOVER).value()));
         } catch (InterruptedException e) {
             logger.error(e.getMessage(), e);
             Assertions.fail(e.getMessage());

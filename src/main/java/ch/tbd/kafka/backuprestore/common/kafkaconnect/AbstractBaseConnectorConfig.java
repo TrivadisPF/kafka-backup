@@ -111,6 +111,27 @@ public abstract class AbstractBaseConnectorConfig extends AbstractConfig impleme
     public static final boolean HEADERS_USE_EXPECT_CONTINUE_DEFAULT =
             ClientConfiguration.DEFAULT_USE_EXPECT_CONTINUE;
 
+    public static final String ROTATE_SCHEDULE_INTERVAL_MS_CONFIG = "rotate.schedule.interval.ms";
+    public static final String ROTATE_SCHEDULE_INTERVAL_MS_DOC =
+            "The time interval in milliseconds to periodically invoke file commits. This configuration "
+                    + "ensures that file commits are invoked every configured interval. Time of commit will be "
+                    + "adjusted to 00:00 of selected timezone. Commit will be performed at scheduled time "
+                    + "regardless previous commit time or number of messages. This configuration is useful when"
+                    + " you have to commit your data based on current server time, like at the beginning of "
+                    + "every hour. The default value -1 means that this feature is disabled.";
+    public static final long ROTATE_SCHEDULE_INTERVAL_MS_DEFAULT = -1L;
+    public static final String ROTATE_SCHEDULE_INTERVAL_MS_DISPLAY = "Rotate Schedule Interval (ms)";
+
+    public static final String ROTATE_INTERVAL_MS_CONFIG = "rotate.interval.ms";
+    public static final String
+            ROTATE_INTERVAL_MS_DOC =
+            "The time interval in milliseconds to invoke file commits. This configuration ensures that "
+                    + "file commits are invoked every configured interval. This configuration is useful when "
+                    + "data ingestion rate is low and the connector didn't write enough messages to commit "
+                    + "files. The default value -1 means that this feature is disabled.";
+    public static final long ROTATE_INTERVAL_MS_DEFAULT = -1L;
+    public static final String ROTATE_INTERVAL_MS_DISPLAY = "Rotate Interval (ms)";
+
 
     protected AbstractBaseConnectorConfig(ConfigDef conf, Map<String, String> props) {
         super(conf, props);
@@ -319,6 +340,30 @@ public abstract class AbstractBaseConnectorConfig extends AbstractConfig impleme
                 "S3 HTTP Send Uses Expect Continue"
         );
 
+        configDef.define(
+                ROTATE_SCHEDULE_INTERVAL_MS_CONFIG,
+                Type.LONG,
+                ROTATE_SCHEDULE_INTERVAL_MS_DEFAULT,
+                Importance.MEDIUM,
+                ROTATE_SCHEDULE_INTERVAL_MS_DOC,
+                group,
+                ++orderInGroup,
+                Width.MEDIUM,
+                ROTATE_SCHEDULE_INTERVAL_MS_DISPLAY
+        );
+
+        configDef.define(
+                ROTATE_INTERVAL_MS_CONFIG,
+                Type.LONG,
+                ROTATE_INTERVAL_MS_DEFAULT,
+                Importance.HIGH,
+                ROTATE_INTERVAL_MS_DOC,
+                group,
+                ++orderInGroup,
+                Width.MEDIUM,
+                ROTATE_INTERVAL_MS_DISPLAY
+        );
+
         return configDef;
     }
 
@@ -348,6 +393,9 @@ public abstract class AbstractBaseConnectorConfig extends AbstractConfig impleme
 
     public String getRegionConfig() {
         return getString(S3_REGION_CONFIG);
+    }
+    public long getRotateIntervalMs() {
+        return getLong(ROTATE_INTERVAL_MS_CONFIG);
     }
 
     public int getS3PartRetries() {

@@ -3,9 +3,16 @@ package ch.tbd.kafka.backuprestore.backup.storage.partitioner;
 import ch.tbd.kafka.backuprestore.backup.kafkaconnect.config.BackupSinkConnectorConfig;
 import ch.tbd.kafka.backuprestore.backup.storage.format.KafkaRecordWriterMultipartUpload;
 import ch.tbd.kafka.backuprestore.backup.storage.format.RecordWriter;
+import ch.tbd.kafka.backuprestore.common.kafkaconnect.AbstractBaseConnectorConfig;
 import ch.tbd.kafka.backuprestore.util.AmazonS3Utils;
 import com.amazonaws.services.s3.AmazonS3;
+import io.confluent.connect.storage.partitioner.Partitioner;
+import io.confluent.connect.storage.partitioner.PartitionerConfig;
+import io.confluent.connect.storage.partitioner.TimeBasedPartitioner;
+import io.confluent.connect.storage.partitioner.TimestampExtractor;
+import io.confluent.connect.storage.util.DateTimeUtils;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.errors.ConnectException;
@@ -14,6 +21,8 @@ import org.apache.kafka.connect.errors.RetriableException;
 import org.apache.kafka.connect.errors.SchemaProjectorException;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTaskContext;
+import org.joda.time.DateTime;
+import org.joda.time.DateTimeZone;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -31,7 +40,7 @@ public class TopicPartitionWriter {
     private final Map<String, RecordWriter> writers;
     private final Map<String, Schema> currentSchemas;
     private final TopicPartition tp;
-    private final Partitioner<?> partitioner;
+    private final io.confluent.connect.storage.partitioner.Partitioner<?> partitioner;
     private State state;
     private final Queue<SinkRecord> buffer;
     private final SinkTaskContext context;
@@ -49,6 +58,10 @@ public class TopicPartitionWriter {
     private final Time time;
     private final BackupSinkConnectorConfig connectorConfig;
     private AmazonS3 amazonS3;
+    private final long rotateScheduleIntervalMs;
+    private DateTimeZone timeZone;
+    private long nextScheduledRotation;
+    private final TimestampExtractor timestampExtractor;
 
     public TopicPartitionWriter(TopicPartition tp,
                                 BackupSinkConnectorConfig connectorConfig,
@@ -68,10 +81,39 @@ public class TopicPartitionWriter {
         failureTime = -1L;
         currentOffset = -1L;
 
+        this.timestampExtractor = partitioner instanceof TimeBasedPartitioner
+                ? ((TimeBasedPartitioner) partitioner).getTimestampExtractor()
+                : null;
+
         this.flushSize = this.connectorConfig.getFlushSize();
         rotateIntervalMs = this.connectorConfig.getRotateIntervalMs();
+
+        if (rotateIntervalMs > 0 && timestampExtractor == null) {
+            log.warn(
+                    "Property '{}' is set to '{}ms' but partitioner is not an instance of '{}'. This property"
+                            + " is ignored.",
+                    AbstractBaseConnectorConfig.ROTATE_INTERVAL_MS_CONFIG,
+                    rotateIntervalMs,
+                    TimeBasedPartitioner.class.getName()
+            );
+        }
+
+        rotateScheduleIntervalMs =
+                connectorConfig.getLong(AbstractBaseConnectorConfig.ROTATE_SCHEDULE_INTERVAL_MS_CONFIG);
+        if (rotateScheduleIntervalMs > 0) {
+            try {
+                timeZone = DateTimeZone.forID(connectorConfig.getString(PartitionerConfig.TIMEZONE_CONFIG));
+            } catch (ConfigException e) {
+                log.warn("No timezone defined. Will configure the default UTC");
+                timeZone = DateTimeZone.forID("UTC");
+            }
+        }
+
         timeoutMs = this.connectorConfig.getRetryBackoffDefault();
         this.amazonS3 = AmazonS3Utils.initConnection(this.connectorConfig);
+
+        // Initialize scheduled rotation timer if applicable
+        setNextScheduledRotation();
     }
 
     private enum State {
@@ -95,7 +137,7 @@ public class TopicPartitionWriter {
 
         while (!buffer.isEmpty()) {
             try {
-                executeState();
+                executeState(now);
             } catch (SchemaProjectorException | IllegalWorkerStateException e) {
                 throw new ConnectException(e);
             } catch (RetriableException e) {
@@ -105,10 +147,10 @@ public class TopicPartitionWriter {
                 break;
             }
         }
-        commitOnTimeIfNoData();
+        commitOnTimeIfNoData(now);
     }
 
-    private void executeState() {
+    private void executeState(long now) {
         switch (state) {
             case WRITE_STARTED:
                 pause();
@@ -125,7 +167,7 @@ public class TopicPartitionWriter {
 
                 if (!checkRotationOrAppend(
                         record,
-                        encodedPartition
+                        encodedPartition, now
                 )) {
                     break;
                 }
@@ -144,9 +186,10 @@ public class TopicPartitionWriter {
 
     private boolean checkRotationOrAppend(
             SinkRecord record,
-            String encodedPartition
+            String encodedPartition, long now
     ) {
-        if (rotateOnTime(encodedPartition, currentTimestamp)) {
+        if (rotateOnTime(encodedPartition, currentTimestamp, now)) {
+            setNextScheduledRotation();
             nextState();
         } else {
             currentEncodedPartition = encodedPartition;
@@ -167,15 +210,16 @@ public class TopicPartitionWriter {
         return true;
     }
 
-    private void commitOnTimeIfNoData() {
+    private void commitOnTimeIfNoData(long now) {
         if (buffer.isEmpty()) {
             // committing files after waiting for rotateIntervalMs time but less than flush.size
             // records available
-            if (recordCount > 0 && rotateOnTime(currentEncodedPartition, currentTimestamp)) {
+            if (recordCount > 0 && rotateOnTime(currentEncodedPartition, currentTimestamp, now)) {
                 log.info(
                         "Committing files after waiting for rotateIntervalMs time but less than flush.size "
                                 + "records available."
                 );
+                setNextScheduledRotation();
 
                 try {
                     commitFiles();
@@ -188,6 +232,24 @@ public class TopicPartitionWriter {
 
             resume();
             setState(State.WRITE_STARTED);
+        }
+    }
+
+    private void setNextScheduledRotation() {
+        if (rotateScheduleIntervalMs > 0) {
+            long now = time.milliseconds();
+            nextScheduledRotation = DateTimeUtils.getNextTimeAdjustedByDay(
+                    now,
+                    rotateScheduleIntervalMs,
+                    timeZone
+            );
+            if (log.isDebugEnabled()) {
+                log.debug(
+                        "Update scheduled rotation timer. Next rotation for {} will be at {}",
+                        tp,
+                        new DateTime(nextScheduledRotation).withZone(timeZone).toString()
+                );
+            }
         }
     }
 
@@ -218,11 +280,12 @@ public class TopicPartitionWriter {
         this.state = state;
     }
 
-    private boolean rotateOnTime(String encodedPartition, Long recordTimestamp) {
+    private boolean rotateOnTime(String encodedPartition, Long recordTimestamp, long now) {
         if (recordCount <= 0) {
             return false;
         }
         boolean periodicRotation = rotateIntervalMs > 0
+                && timestampExtractor != null
                 && (
                 recordTimestamp - baseRecordTimestamp >= rotateIntervalMs
                         || !encodedPartition.equals(currentEncodedPartition)
@@ -245,8 +308,16 @@ public class TopicPartitionWriter {
                 periodicRotation
         );
 
-
-        return periodicRotation;
+        boolean scheduledRotation = rotateScheduleIntervalMs > 0 && now >= nextScheduledRotation;
+        log.trace(
+                "Should apply scheduled rotation: (rotateScheduleIntervalMs: '{}', nextScheduledRotation:"
+                        + " '{}', now: '{}')? {}",
+                rotateScheduleIntervalMs,
+                nextScheduledRotation,
+                now,
+                scheduledRotation
+        );
+        return periodicRotation || scheduledRotation;
     }
 
     private boolean rotateOnSize() {

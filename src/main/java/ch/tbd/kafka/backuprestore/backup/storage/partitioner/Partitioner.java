@@ -9,6 +9,7 @@ import org.apache.kafka.connect.sink.SinkRecord;
  * @author iorfinoa
  * @version $$Revision$$
  */
+@Deprecated
 public interface Partitioner<T> {
 
     String encodePartition(SinkRecord sinkRecord);

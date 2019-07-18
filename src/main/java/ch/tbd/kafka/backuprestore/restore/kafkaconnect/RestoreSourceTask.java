@@ -30,7 +30,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public class RestoreSourceTask extends SourceTask {
 
     private final Logger logger = LoggerFactory.getLogger(RestoreSourceTask.class);
-    private KafkaRecordDeserializer kafkaRecordDeserializer = new KafkaRecordAvroDeserializer();
 
     private static final String TOPIC_PARTITION_FIELD = "TOPIC_PARTITION_NAME";
     private static final String TOPIC_POSITION_FIELD = "TOPIC_POSITION_FIELD";
@@ -127,7 +126,7 @@ public class RestoreSourceTask extends SourceTask {
                     S3ObjectSummary s3ObjectSummary = it.next();
                     if (!keyRestored.contains(s3ObjectSummary.getKey())) {
                         GetObjectRequest getObjectRequest = new GetObjectRequest(connectorConfig.getBucketName(), s3ObjectSummary.getKey());
-                        LinkedList<KafkaRecord> kafkaRecordLinkedList = convertS3ObjectToKafkaRecords(amazonS3.getObject(getObjectRequest).getObjectContent());
+                        LinkedList<KafkaRecord> kafkaRecordLinkedList = AmazonS3Utils.convertS3ObjectToKafkaRecords(amazonS3.getObject(getObjectRequest).getObjectContent());
                         int countRecordsRemainToCommit = kafkaRecordLinkedList.size();
                         for (KafkaRecord kafkaRecord : kafkaRecordLinkedList) {
                             if (hasMoreSpaceToAddRecords(sourceRecordList)
@@ -215,22 +214,7 @@ public class RestoreSourceTask extends SourceTask {
         return null;
     }
 
-    private LinkedList<KafkaRecord> convertS3ObjectToKafkaRecords(S3ObjectInputStream s3ObjectInputStream) {
-        LinkedList<KafkaRecord> kafkaRecordLinkedList = new LinkedList<>();
-        DatumReader<AvroKafkaRecord> reader = new GenericDatumReader<>(AvroKafkaRecord.getClassSchema());
-        try (DataFileStream<AvroKafkaRecord> objectDataFileStream = new DataFileStream<>(s3ObjectInputStream, reader)) {
 
-            while (objectDataFileStream.hasNext()) {
-                AvroKafkaRecord record = new AvroKafkaRecord();
-                objectDataFileStream.next(record);
-                kafkaRecordLinkedList.add(kafkaRecordDeserializer.deserialize(record.toByteBuffer()));
-            }
-
-        } catch (IOException e) {
-            logger.error(e.getMessage(), e);
-        }
-        return kafkaRecordLinkedList;
-    }
 
     private String keyPartitionOffsetKafkaConnect(int partition) {
         return s3TopicName + Constants.DASH_KEY_SEPARATOR + kafkaTopicName + Constants.DASH_KEY_SEPARATOR + partition;
