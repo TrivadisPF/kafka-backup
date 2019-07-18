@@ -183,7 +183,6 @@ public class RestoreSourceTask extends SourceTask {
         ConnectHeaders connectHeaders = new ConnectHeaders();
         connectHeaders.addString(Constants.KEY_HEADER_OLD_OFFSET, String.valueOf(offset));
         connectHeaders.addString(Constants.KEY_HEADER_RESTORED, String.valueOf(Calendar.getInstance().getTimeInMillis()));
-        connectHeaders.addString(Constants.KEY_HEADER_RECOVER, String.valueOf(true));
         List<Header> headerList = new ArrayList<>();
         if (mapHeaders != null && !mapHeaders.isEmpty()) {
             mapHeaders.keySet().iterator().forEachRemaining(header -> {
