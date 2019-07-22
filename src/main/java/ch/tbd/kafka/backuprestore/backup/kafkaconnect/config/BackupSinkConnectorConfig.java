@@ -35,16 +35,6 @@ public class BackupSinkConnectorConfig extends AbstractBaseConnectorConfig {
             "Number of records written to store before invoking file commits.";
     private static final String FLUSH_SIZE_DISPLAY = "Flush Size";
 
-    private static final String ROTATE_INTERVAL_MS_CONFIG = "rotate.interval.ms";
-    private static final String
-            ROTATE_INTERVAL_MS_DOC =
-            "The time interval in milliseconds to invoke file commits. This configuration ensures that "
-                    + "file commits are invoked every configured interval. This configuration is useful when "
-                    + "data ingestion rate is low and the connector didn't write enough messages to commit "
-                    + "files. The default value -1 means that this feature is disabled.";
-    private static final long ROTATE_INTERVAL_MS_DEFAULT = -1L;
-    private static final String ROTATE_INTERVAL_MS_DISPLAY = "Rotate Interval (ms)";
-
     private static final String RETRY_BACKOFF_CONFIG = "retry.backoff.ms";
     private static final String
             RETRY_BACKOFF_DOC =
@@ -161,18 +151,6 @@ public class BackupSinkConnectorConfig extends AbstractBaseConnectorConfig {
         );
 
         configDef.define(
-                ROTATE_INTERVAL_MS_CONFIG,
-                Type.LONG,
-                ROTATE_INTERVAL_MS_DEFAULT,
-                Importance.HIGH,
-                ROTATE_INTERVAL_MS_DOC,
-                group,
-                ++orderInGroup,
-                Width.MEDIUM,
-                ROTATE_INTERVAL_MS_DISPLAY
-        );
-
-        configDef.define(
                 RETRY_BACKOFF_CONFIG,
                 Type.LONG,
                 RETRY_BACKOFF_DEFAULT,
@@ -229,10 +207,6 @@ public class BackupSinkConnectorConfig extends AbstractBaseConnectorConfig {
 
     public int getFlushSize() {
         return getInt(BackupSinkConnectorConfig.FLUSH_SIZE_CONFIG);
-    }
-
-    public long getRotateIntervalMs() {
-        return getLong(ROTATE_INTERVAL_MS_CONFIG);
     }
 
     public long getRetryBackoffDefault() {

@@ -1,8 +1,6 @@
 package ch.tbd.kafka.backuprestore.backup.kafkaconnect.compact;
 
 import ch.tbd.kafka.backuprestore.backup.kafkaconnect.compact.config.CompactBackupSinkConnectorConfig;
-import ch.tbd.kafka.backuprestore.backup.storage.partitioner.DefaultPartitioner;
-import ch.tbd.kafka.backuprestore.backup.storage.partitioner.Partitioner;
 import ch.tbd.kafka.backuprestore.backup.storage.partitioner.TopicPartitionWriter;
 import ch.tbd.kafka.backuprestore.model.avro.AvroCompactedLogBackupCoordination;
 import ch.tbd.kafka.backuprestore.model.avro.EnumType;
@@ -10,6 +8,8 @@ import ch.tbd.kafka.backuprestore.util.AmazonS3Utils;
 import ch.tbd.kafka.backuprestore.util.Constants;
 import ch.tbd.kafka.backuprestore.util.Version;
 import com.amazonaws.services.s3.AmazonS3;
+import io.confluent.connect.storage.partitioner.DefaultPartitioner;
+import io.confluent.connect.storage.partitioner.Partitioner;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.consumer.*;

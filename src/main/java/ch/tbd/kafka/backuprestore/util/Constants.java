@@ -16,7 +16,6 @@ public interface Constants {
 
     public static final String KEY_HEADER_OLD_OFFSET = "x-old-offset";
     public static final String KEY_HEADER_RESTORED = "x-restored";
-    public static final String KEY_HEADER_RECOVER = "x-recover";
 
     public static final String KEY_S3_TOPIC_NAME_TASK = "KEY_S3_TOPIC_NAME_TASK";
     public static final String KEY_TOPIC_NAME_TASK = "KEY_TOPIC_NAME_TASK";

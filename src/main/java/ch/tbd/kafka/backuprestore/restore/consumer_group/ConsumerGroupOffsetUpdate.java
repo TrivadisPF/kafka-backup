@@ -1,17 +1,27 @@
 package ch.tbd.kafka.backuprestore.restore.consumer_group;
 
+import ch.tbd.kafka.backuprestore.model.KafkaRecord;
+import ch.tbd.kafka.backuprestore.util.AmazonS3Utils;
 import ch.tbd.kafka.backuprestore.util.Constants;
+import ch.tbd.kafka.backuprestore.util.ConsumerOffsetsUtils;
+import com.amazonaws.regions.Regions;
+import com.amazonaws.services.s3.AmazonS3;
+import com.amazonaws.services.s3.model.GetObjectRequest;
+import com.amazonaws.services.s3.model.ListObjectsRequest;
+import com.amazonaws.services.s3.model.ObjectListing;
+import com.amazonaws.services.s3.model.S3ObjectSummary;
+import org.apache.commons.cli.*;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.ConsumerGroupListing;
 import org.apache.kafka.clients.admin.ListConsumerGroupOffsetsResult;
 import org.apache.kafka.clients.admin.ListConsumerGroupsResult;
 import org.apache.kafka.clients.consumer.*;
-import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.config.SslConfigs;
+import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.ByteBufferDeserializer;
@@ -20,13 +30,13 @@ import org.apache.kafka.connect.storage.SimpleHeaderConverter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.ExecutionException;
+
+import static ch.tbd.kafka.backuprestore.common.kafkaconnect.AbstractBaseConnectorConfig.*;
 
 /**
  * Class ConsumerGroupOffsetUpdate.
@@ -38,153 +48,249 @@ import java.util.concurrent.ExecutionException;
 public class ConsumerGroupOffsetUpdate {
 
     private static Logger logger = LoggerFactory.getLogger(ConsumerGroupOffsetUpdate.class);
+    private static final String S3_TOPIC_NAME_KEY = "s3.topic.name";
     private Properties propertiesFile = new Properties();
 
     public static void main(String[] args) {
 
-        if (args.length < 3) {
-            logger.error("Please insert the following data:");
-            logger.error("   1 -> Properties file wich contains the data to open connection");
-            logger.error("   2 -> TOPIC_NAME (old_topic_name:new_topic_name,old_topic_name1 - new_topic_name is optional in case the topic have the same name)");
-            logger.error("   3 -> CONSUMER_GROUP_NAME - Insert the consumer group to update");
-            System.exit(-1);
-        }
+        final Options options = new Options();
+        options.addOption(Option.builder("f").longOpt("file").hasArg().desc("Properties file which contains the data to open connection").required().build());
+        options.addOption(Option.builder("t").longOpt("topics").hasArg().desc("Topic association old_topic:new_topic [new_topic is optional]").required().build());
+        options.addOption(Option.builder("c").longOpt("consumergroup").hasArg().desc("Consumer group name to update").required().build());
 
-        ConsumerGroupOffsetUpdate consumerGroupOffsetUpdate = new ConsumerGroupOffsetUpdate();
-        consumerGroupOffsetUpdate.execute(args);
+        options.addOption(Option.builder("o").longOpt("offsets").hasArg().desc("Map old partition:offsets to update").build());
+
+        options.addOption(Option.builder("s").longOpt("s3.file").hasArg().desc("Properties file which contains the parameter to open S3 connection").build());
+
+        options.addOption(Option.builder("h").longOpt("help").hasArg(false).desc("Print Usage help").build());
+
+        HelpFormatter formatter = new HelpFormatter();
+
+        CommandLineParser parser = new DefaultParser();
+        try {
+            CommandLine cmd = parser.parse(options, args);
+            if (cmd.getOptions().length == 0 || cmd.hasOption("h")) {
+                formatter.printHelp("gen", options);
+            } else {
+                ConsumerGroupOffsetUpdate consumerGroupOffsetUpdate = new ConsumerGroupOffsetUpdate();
+                consumerGroupOffsetUpdate.execute(cmd);
+            }
+        } catch (ParseException e) {
+            logger.error(e.getMessage(), e);
+        }
     }
 
-    public void execute(String[] args) {
-        FileInputStream file = null;
-        try {
-            file = new FileInputStream(args[0]);
-            propertiesFile.load(file);
-        } catch (FileNotFoundException e) {
-            logger.error(e.getMessage(), e);
-        } catch (IOException e) {
-            logger.error(e.getMessage(), e);
-        } finally {
-            if (file != null) {
+    public void execute(CommandLine commandLine) {
+
+        ConfigConsumerGroupOffsets configConsumerGroupOffsets = new ConfigConsumerGroupOffsets(commandLine);
+        if (!configConsumerGroupOffsets.isPartitionOffsetDefined() && configConsumerGroupOffsets.isS3AmazonConfigurationDefined()) {
+            extractOffsetFromS3(configConsumerGroupOffsets);
+        } else if (!configConsumerGroupOffsets.isPartitionOffsetDefined()) {
+            extractOffset(configConsumerGroupOffsets);
+        }
+
+        logger.info("Configuration for Old Topic >{}< - New Topic >{}< - Consumer group >{}<", configConsumerGroupOffsets.getOldTopicName(),
+                configConsumerGroupOffsets.getNewTopicName(), configConsumerGroupOffsets.getConsumerGroupName());
+
+        SimpleHeaderConverter shc = new SimpleHeaderConverter();
+        if (!configConsumerGroupOffsets.getMapOldPartitionOffsets().isEmpty()) {
+            try (Consumer consumer = new KafkaConsumer(createPropertiesConsumer(configConsumerGroupOffsets.getConsumerGroupName() + "_RESTORE"))) {
+                consumer.subscribe(Collections.singletonList(configConsumerGroupOffsets.getNewTopicName()), new ConsumerRebalanceListener() {
+                    @Override
+                    public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+                    }
+
+                    @Override
+                    public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
+                        consumer.seekToBeginning(partitions);
+                    }
+                });
+                int MAX_ATTEMPS = 5;
+                int count = 0;
+                boolean continueConsumeData = true;
+                while (continueConsumeData) {
+                    ConsumerRecords<ByteBuffer, ByteBuffer> consumerRecords = consumer.poll(Duration.ofMillis(1000));
+                    if (consumerRecords.count() == 0) {
+                        if (count < MAX_ATTEMPS) {
+                            count++;
+                            continueConsumeData = true;
+                        } else {
+                            continueConsumeData = false;
+                        }
+                        continue;
+                    }
+                    for (ConsumerRecord<ByteBuffer, ByteBuffer> record : consumerRecords) {
+                        int partition = record.partition();
+                        long newOffset = record.offset();
+                        if (!configConsumerGroupOffsets.getMapOldPartitionOffsets().containsKey(partition)) {
+                            continue;
+                        }
+                        Headers headers = record.headers();
+                        long oldOffset = -1L;
+                        for (Header header : headers.toArray()) {
+                            String key = header.key();
+                            byte[] value = header.value();
+                            if (Constants.KEY_HEADER_OLD_OFFSET.equalsIgnoreCase(key)) {
+                                SchemaAndValue schemaAndValue = shc.toConnectHeader(record.topic(), Constants.KEY_HEADER_OLD_OFFSET, value);
+                                oldOffset = Long.valueOf(String.valueOf(schemaAndValue.value()));
+                                configConsumerGroupOffsets.getMapNewPartitionOffsets().put(partition, newOffset);
+                            }
+                        }
+                        if (configConsumerGroupOffsets.getMapOldPartitionOffsets().containsKey(partition) && configConsumerGroupOffsets.getMapOldPartitionOffsets().get(partition) == oldOffset) {
+                            updateOffsetConsumerGroup(configConsumerGroupOffsets.getNewTopicName(), configConsumerGroupOffsets.getConsumerGroupName(), partition, newOffset);
+                            configConsumerGroupOffsets.getMapOldPartitionOffsets().remove(partition);
+                        }
+                    }
+                }
+                if (!configConsumerGroupOffsets.getMapOldPartitionOffsets().isEmpty()) {
+                    Iterator<Integer> partitionsNotUpdated = configConsumerGroupOffsets.getMapNewPartitionOffsets().keySet().iterator();
+                    while (partitionsNotUpdated.hasNext()) {
+                        int partition = partitionsNotUpdated.next();
+                        long newOffset = configConsumerGroupOffsets.getMapNewPartitionOffsets().get(partition);
+                        logger.warn("No latest offset found on new topic. Set new offset with the latest record");
+                        updateOffsetConsumerGroup(configConsumerGroupOffsets.getNewTopicName(), configConsumerGroupOffsets.getConsumerGroupName(), partition, newOffset);
+                    }
+                }
+            } finally {
                 try {
-                    file.close();
+                    shc.close();
                 } catch (IOException e) {
                     logger.error(e.getMessage(), e);
                 }
             }
+        } else {
+            throw new IllegalStateException("No offset found to update. Please check the configuration");
         }
+    }
 
-        String topics = args[1];
-        String consumerGroupName = args[2];
-        String[] listTopic = topics.split(",");
-        for (String topic : listTopic) {
-            String oldTopic = null;
-            String newTopic = null;
-            if (topic.indexOf(":") > -1) {
-                oldTopic = topic.split(":")[0];
-                newTopic = topic.split(":")[1];
-            } else {
-                oldTopic = topic;
-                newTopic = topic;
-            }
-            ConfigurationConsumerGroupOffset configuration =
-                    ConfigurationConsumerGroupOffset.createConfigurationConsumerGroupOffset(oldTopic, newTopic, consumerGroupName);
-            logger.info("Configuration for Old Topic >{}< - New Topic >{}< - Consumer group >{}<", configuration.getOldTopicName(), configuration.getNewTopicName(), configuration.getConsumerGroup());
-
-            try (AdminClient adminClient = AdminClient.create(createPropertiesAdminClient())) {
-
-                ListConsumerGroupsResult result = adminClient.listConsumerGroups();
-                try {
-                    Collection<ConsumerGroupListing> collectionConsumerGroupListing = result.all().get();
-                    collectionConsumerGroupListing.stream().forEach(a -> {
-                        if (a.groupId().equalsIgnoreCase(configuration.getConsumerGroup())) {
-                            ListConsumerGroupOffsetsResult offsetsResult = adminClient.listConsumerGroupOffsets(configuration.getConsumerGroup());
-                            try {
-                                Map<TopicPartition, OffsetAndMetadata> mapTopicAndPartitions = offsetsResult.partitionsToOffsetAndMetadata().get();
-                                mapTopicAndPartitions.keySet().stream().filter(topicPartition -> {
-                                    if (topicPartition.topic().equalsIgnoreCase(configuration.getOldTopicName())) {
-                                        return true;
-                                    }
-                                    return false;
-                                }).forEach(topicPartition -> {
-                                    configuration.getMapPartitionOldOffset().put(topicPartition.partition(), mapTopicAndPartitions.get(topicPartition).offset());
-                                });
-                                if (!configuration.getMapPartitionOldOffset().isEmpty()) {
-
-                                    Consumer consumer = new KafkaConsumer(createPropertiesConsumer(configuration.getConsumerGroup() + "_RESTORE"));
-                                    consumer.subscribe(Collections.singletonList(configuration.getNewTopicName()), new ConsumerRebalanceListener() {
-                                        @Override
-                                        public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
-                                        }
-
-                                        @Override
-                                        public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
-                                            consumer.seekToBeginning(partitions);
-                                        }
-                                    });
-                                    int MAX_ATTEMPS = 5;
-                                    int count = 0;
-                                    boolean continueConsumeData = true;
-                                    SimpleHeaderConverter shc = new SimpleHeaderConverter();
-                                    while (continueConsumeData) {
-                                        ConsumerRecords<ByteBuffer, ByteBuffer> consumerRecords = consumer.poll(Duration.ofMillis(1000));
-                                        if (consumerRecords.count() == 0) {
-                                            if (count < MAX_ATTEMPS) {
-                                                count++;
-                                                continueConsumeData = true;
-                                            } else {
-                                                continueConsumeData = false;
-                                            }
-                                            continue;
-                                        }
-                                        for (ConsumerRecord<ByteBuffer, ByteBuffer> record : consumerRecords) {
-                                            int partition = record.partition();
-                                            long newOffset = record.offset();
-                                            if (!configuration.getMapPartitionOldOffset().containsKey(partition)) {
-                                                continue;
-                                            }
-                                            Headers headers = record.headers();
-                                            long oldOffset = -1L;
-                                            for (Header header : headers.toArray()) {
-                                                String key = header.key();
-                                                byte[] value = header.value();
-                                                if (Constants.KEY_HEADER_OLD_OFFSET.equalsIgnoreCase(key)) {
-                                                    SchemaAndValue schemaAndValue = shc.toConnectHeader(record.topic(), Constants.KEY_HEADER_OLD_OFFSET, value);
-                                                    oldOffset = Long.valueOf(String.valueOf(schemaAndValue.value()));
-                                                    configuration.getMapPartitionNewLatestOffset().put(partition, newOffset);
-                                                }
-                                            }
-                                            if (configuration.getMapPartitionOldOffset().containsKey(partition) && configuration.getMapPartitionOldOffset().get(partition) == oldOffset) {
-                                                updateOffsetConsumerGroup(configuration.getNewTopicName(), configuration.getConsumerGroup(), partition, newOffset);
-                                                configuration.getMapPartitionOldOffset().remove(partition);
-                                            }
-                                        }
-                                    }
-                                    if (!configuration.getMapPartitionOldOffset().isEmpty()) {
-                                        Iterator<Integer> partitionsNotUpdated = configuration.getMapPartitionNewLatestOffset().keySet().iterator();
-                                        while (partitionsNotUpdated.hasNext()) {
-                                            int partition = partitionsNotUpdated.next();
-                                            long newOffset = configuration.getMapPartitionNewLatestOffset().get(partition);
-                                            logger.warn("No latest offset found on new topic. Set new offset with the latest record");
-                                            updateOffsetConsumerGroup(configuration.getNewTopicName(), configuration.getConsumerGroup(), partition, newOffset);
-                                        }
-                                    }
+    private void extractOffset(ConfigConsumerGroupOffsets configuration) {
+        try (AdminClient adminClient = AdminClient.create(createPropertiesAdminClient())) {
+            ListConsumerGroupsResult result = adminClient.listConsumerGroups();
+            try {
+                Collection<ConsumerGroupListing> collectionConsumerGroupListing = result.all().get();
+                collectionConsumerGroupListing.stream().forEach(a -> {
+                    if (a.groupId().equalsIgnoreCase(configuration.getConsumerGroupName())) {
+                        ListConsumerGroupOffsetsResult offsetsResult = adminClient.listConsumerGroupOffsets(configuration.getConsumerGroupName());
+                        try {
+                            Map<TopicPartition, OffsetAndMetadata> mapTopicAndPartitions = offsetsResult.partitionsToOffsetAndMetadata().get();
+                            mapTopicAndPartitions.keySet().stream().filter(topicPartition -> {
+                                if (topicPartition.topic().equalsIgnoreCase(configuration.getOldTopicName())) {
+                                    return true;
                                 }
-                            } catch (ExecutionException e) {
-                                logger.error(e.getMessage(), e);
-                            } catch (InterruptedException e) {
-                                logger.error(e.getMessage(), e);
-                            }
+                                return false;
+                            }).forEach(topicPartition -> {
+                                configuration.getMapOldPartitionOffsets().put(topicPartition.partition(), mapTopicAndPartitions.get(topicPartition).offset());
+                            });
+                        } catch (ExecutionException e) {
+                            logger.error(e.getMessage(), e);
+
+                        } catch (InterruptedException e) {
+                            logger.error(e.getMessage(), e);
                         }
-                    });
-                } catch (ExecutionException e) {
-                    logger.error(e.getMessage(), e);
-                } catch (InterruptedException e) {
-                    logger.error(e.getMessage(), e);
-                }
-            } catch (KafkaException e) {
+                    }
+                });
+            } catch (ExecutionException e) {
+                logger.error(e.getMessage(), e);
+            } catch (InterruptedException e) {
                 logger.error(e.getMessage(), e);
             }
+        } catch (KafkaException e) {
+            logger.error(e.getMessage(), e);
         }
+    }
+
+    private void extractOffsetFromS3(ConfigConsumerGroupOffsets configuration) {
+
+        String bucketName = configuration.getPropertiesS3Amazon().getProperty(S3_BUCKET_CONFIG);
+
+        String profileName = null;
+        if (configuration.getPropertiesS3Amazon().containsKey(S3_PROFILE_NAME_CONFIG)) {
+            profileName = configuration.getPropertiesS3Amazon().getProperty(S3_PROFILE_NAME_CONFIG);
+        }
+        String regionConfig = configuration.getPropertiesS3Amazon().getProperty(S3_REGION_CONFIG);
+
+        boolean wanModeConfig = false;
+        if (configuration.getPropertiesS3Amazon().containsKey(WAN_MODE_CONFIG)) {
+            wanModeConfig = Boolean.valueOf(configuration.getPropertiesS3Amazon().getProperty(WAN_MODE_CONFIG));
+        }
+
+        String proxyUrlConfig = null;
+        if (configuration.getPropertiesS3Amazon().containsKey(S3_PROXY_URL_CONFIG)) {
+            proxyUrlConfig = configuration.getPropertiesS3Amazon().getProperty(S3_PROXY_URL_CONFIG);
+        }
+
+        String proxyUser = null;
+        if (configuration.getPropertiesS3Amazon().containsKey(S3_PROXY_USER_CONFIG)) {
+            proxyUser = configuration.getPropertiesS3Amazon().getProperty(S3_PROXY_USER_CONFIG);
+        }
+
+        String proxyPassStr = null;
+        if (configuration.getPropertiesS3Amazon().containsKey(S3_PROXY_PASS_CONFIG)) {
+            proxyPassStr = configuration.getPropertiesS3Amazon().getProperty(S3_PROXY_PASS_CONFIG);
+        }
+
+        Password proxyPass = new Password(proxyPassStr);
+
+        Integer s3RetryBackoffConfig = 200;
+        if (configuration.getPropertiesS3Amazon().containsKey(S3_RETRY_BACKOFF_CONFIG)) {
+            s3RetryBackoffConfig = Integer.valueOf(configuration.getPropertiesS3Amazon().getProperty(S3_RETRY_BACKOFF_CONFIG));
+        }
+
+        Integer s3PartRetriesConfig = 3;
+        if (configuration.getPropertiesS3Amazon().containsKey(S3_PART_RETRIES_CONFIG)) {
+            s3PartRetriesConfig = Integer.valueOf(configuration.getPropertiesS3Amazon().getProperty(S3_PART_RETRIES_CONFIG));
+        }
+
+        boolean headersUseExpectContinue = true;
+        if (configuration.getPropertiesS3Amazon().containsKey(HEADERS_USE_EXPECT_CONTINUE_CONFIG)) {
+            headersUseExpectContinue = Boolean.valueOf(configuration.getPropertiesS3Amazon().getProperty(HEADERS_USE_EXPECT_CONTINUE_CONFIG));
+        }
+
+        AmazonS3 amazonS3 = AmazonS3Utils.initConnection(profileName, regionConfig, wanModeConfig, proxyUrlConfig,
+                proxyUser, proxyPass, s3RetryBackoffConfig, s3PartRetriesConfig, headersUseExpectContinue);
+
+        if (!configuration.getPropertiesS3Amazon().containsKey(S3_TOPIC_NAME_KEY)) {
+            throw new IllegalArgumentException("No topic name to read on S3 configured. Please check the configuration");
+        }
+        String consumerOffsetFolderName = configuration.getPropertiesS3Amazon().getProperty(S3_TOPIC_NAME_KEY);
+
+        ListObjectsRequest objectsPartitionReq = new ListObjectsRequest().withBucketName(bucketName).
+                withPrefix(consumerOffsetFolderName + Constants.S3_KEY_SEPARATOR);
+
+        ObjectListing resultPartitionReq = amazonS3.listObjects(objectsPartitionReq);
+        if (resultPartitionReq != null) {
+            List<S3ObjectSummary> s3ObjectSummaries = resultPartitionReq.getObjectSummaries();
+            while (resultPartitionReq.isTruncated()) {
+                resultPartitionReq = amazonS3.listNextBatchOfObjects(resultPartitionReq);
+                s3ObjectSummaries.addAll(resultPartitionReq.getObjectSummaries());
+            }
+
+            Collections.sort(s3ObjectSummaries, Comparator.comparing(S3ObjectSummary::getKey).thenComparing(S3ObjectSummary::getLastModified));
+            Iterator<S3ObjectSummary> it = s3ObjectSummaries.iterator();
+
+            while (it.hasNext()) {
+                S3ObjectSummary s3ObjectSummary = it.next();
+                GetObjectRequest getObjectRequest = new GetObjectRequest(bucketName, s3ObjectSummary.getKey());
+                LinkedList<KafkaRecord> kafkaRecordLinkedList = AmazonS3Utils.convertS3ObjectToKafkaRecords(amazonS3.getObject(getObjectRequest).getObjectContent());
+
+
+                for (KafkaRecord kafkaRecord : kafkaRecordLinkedList) {
+                    KeyConsumerGroup keyConsumerGroup = ConsumerOffsetsUtils.readMessageKey(kafkaRecord.getKey());
+                    if (keyConsumerGroup.getGroup().equals(configuration.getConsumerGroupName())
+                            && keyConsumerGroup.validRecord()) {
+                        logger.info("EQUALS");
+                        ValueConsumerGroup valueConsumerGroup = ConsumerOffsetsUtils.readMessageValue(kafkaRecord.getValue());
+                        if (configuration.getMapOldPartitionOffsets().containsKey(keyConsumerGroup.getPartition())
+                                && configuration.getMapOldPartitionOffsets().get(keyConsumerGroup.getPartition()) < valueConsumerGroup.getOffset()) {
+                            configuration.getMapOldPartitionOffsets().put(keyConsumerGroup.getPartition(), valueConsumerGroup.getOffset());
+                        } else {
+                            configuration.getMapOldPartitionOffsets().put(keyConsumerGroup.getPartition(), valueConsumerGroup.getOffset());
+                        }
+                    }
+                }
+            }
+        }
+
     }
 
     private void updateOffsetConsumerGroup(String topicName, String consumerGroup, int partition, long offset) {
