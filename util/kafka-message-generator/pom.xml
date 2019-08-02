@@ -14,7 +14,7 @@
 	<artifactId>kafka-backup-perftest</artifactId>
 	<packaging>jar</packaging>
 	<version>00.01.00.01-SNAPSHOT</version>
-	<name>kafka-backup-perftest</name>
+	<name>kafka-message-generator</name>
 
 	<build>
 		<resources>

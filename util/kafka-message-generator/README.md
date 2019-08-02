@@ -67,7 +67,7 @@ Make sure that you place the file into the watch folder, specified when running 
 Create messages of size 10KB equally distributed over the partitions
 
 ```
-java -jar target/kafka-backup-perftest-00.01.00.01-SNAPSHOT.jar -t=test-topic -b=analyticsplatform:9092 -s=10KB
+java -jar target/kafka-message-generator-00.01.00.01-SNAPSHOT.jar -t=test-topic -b=analyticsplatform:9092 -s=10KB
 ```
 
 You can use all the units for the message size (`-s`) supported by the [DataSize](https://docs.spring.io/spring/docs/current/javadoc-api/org/springframework/util/unit/DataSize.html) class of the Spring Framework. 
@@ -75,20 +75,20 @@ You can use all the units for the message size (`-s`) supported by the [DataSize
 Create messages of size 10KB equally distributed over the partitions (assuming that the topic `test-topic` contains 8 partitions. By using the `-d` parameter, we tell the CLI to produce 4x more data to partition 0 and 2:
 
 ```
-java -jar target/kafka-backup-perftest-00.01.00.01-SNAPSHOT.jar -t=test-topic -b=analyticsplatform:9092 -s=10KB -d="4,1,4,1,1,1,1,1"
+java -jar target/kafka-message-generator-00.01.00.01-SNAPSHOT.jar -t=test-topic -b=analyticsplatform:9092 -s=10KB -d="4,1,4,1,1,1,1,1"
 ```
 
 To specify the number of messages to produce, you can use the `-n` option. 
 
 ```
-java -jar target/kafka-backup-perftest-00.01.00.01-SNAPSHOT.jar -t=test-topic -b=analyticsplatform:9092 -s=10KB -n=10000
+java -jar target/kafka-message-generator-00.01.00.01-SNAPSHOT.jar -t=test-topic -b=analyticsplatform:9092 -s=10KB -n=10000
 ```
 
 
 To create the topic before producing data, use the `-c` and optionally the `-p` and `-r` parameter to specify the partitions and the replication factor, which otherwise default to `1`.
 
 ```
-java -jar target/kafka-backup-perftest-00.01.00.01-SNAPSHOT.jar -t=test-topic -b=analyticsplatform:9092 -s=10KB -c -p=8
+java -jar target/kafka-message-generator-00.01.00.01-SNAPSHOT.jar -t=test-topic -b=analyticsplatform:9092 -s=10KB -c -p=8
 ```
 
 
