@@ -11,7 +11,7 @@
 	</parent>
 
 	<groupId>ch.tbd.kafka</groupId>
-	<artifactId>kafka-backup-perftest</artifactId>
+	<artifactId>kafka-message-generator</artifactId>
 	<packaging>jar</packaging>
 	<version>00.01.00.01-SNAPSHOT</version>
 	<name>kafka-message-generator</name>
