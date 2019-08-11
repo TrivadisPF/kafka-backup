@@ -8,6 +8,8 @@ import ch.tbd.kafka.backuprestore.restore.deserializers.avro.KafkaRecordAvroDese
 import com.amazonaws.ClientConfiguration;
 import com.amazonaws.PredefinedClientConfigurations;
 import com.amazonaws.auth.profile.ProfileCredentialsProvider;
+import com.amazonaws.client.builder.AwsClientBuilder;
+import com.amazonaws.client.builder.AwsClientBuilder.EndpointConfiguration;
 import com.amazonaws.retry.PredefinedBackoffStrategies;
 import com.amazonaws.retry.PredefinedRetryPolicies;
 import com.amazonaws.retry.RetryPolicy;
@@ -43,29 +45,46 @@ public class AmazonS3Utils {
 
     public static AmazonS3 initConnection(AbstractBaseConnectorConfig connectorConfig) {
         ClientConfiguration clientConfiguration = newClientConfiguration(connectorConfig);
+        if (connectorConfig.getAWSSignerOverrideConfig() != null) {
+        	clientConfiguration.setSignerOverride(connectorConfig.getAWSSignerOverrideConfig());
+        }
         AmazonS3ClientBuilder builder = AmazonS3ClientBuilder.standard();
-        builder.withAccelerateModeEnabled(connectorConfig.getBoolean(WAN_MODE_CONFIG));
-        builder.withRegion(connectorConfig.getRegionConfig());
+        builder.withAccelerateModeEnabled(connectorConfig.getBoolean(S3_WAN_MODE_CONFIG));
+        if (connectorConfig.getServiceEndpointConfig() == null) {
+        	builder.withRegion(connectorConfig.getRegionConfig());
+        } else {
+            builder.withEndpointConfiguration(new AwsClientBuilder.EndpointConfiguration(connectorConfig.getServiceEndpointConfig(), connectorConfig.getRegionConfig()));
+        }
+        
         if (null == connectorConfig.getS3ProfileNameConfig()) {
             builder.setCredentials(new ProfileCredentialsProvider());
         } else {
             builder.setCredentials(new ProfileCredentialsProvider(connectorConfig.getS3ProfileNameConfig()));
         }
+        builder.withPathStyleAccessEnabled(connectorConfig.usePathStyleAccess());
         builder.withClientConfiguration(clientConfiguration);
         return builder.build();
     }
 
-    public static AmazonS3 initConnection(String profileNameConfig, String regionConfig, boolean wanModeConfig, String proxyUrlConfig, String proxyUser, Password proxyPass,
-                                          Integer s3RetryBackoffConfig, Integer s3PartRetries, boolean useExpectToContinue) {
+    public static AmazonS3 initConnection(String profileNameConfig, String serviceEndpoint, String regionConfig, boolean wanModeConfig, String proxyUrlConfig, String proxyUser, Password proxyPass,
+                                          boolean usePathStyleAccess, String awsSignerOverride, Integer s3RetryBackoffConfig, Integer s3PartRetries, boolean useExpectToContinue) {
         ClientConfiguration clientConfiguration = newClientConfiguration(proxyUrlConfig, proxyUser, proxyPass, s3RetryBackoffConfig, s3PartRetries, useExpectToContinue);
+        if (awsSignerOverride != null) {
+        	clientConfiguration.setSignerOverride(awsSignerOverride);
+        }
         AmazonS3ClientBuilder builder = AmazonS3ClientBuilder.standard();
         builder.withAccelerateModeEnabled(wanModeConfig);
-        builder.withRegion(regionConfig);
+        if (serviceEndpoint == null) {
+            builder.withRegion(regionConfig);
+        } else {
+            builder.withEndpointConfiguration(new AwsClientBuilder.EndpointConfiguration(serviceEndpoint, regionConfig));
+        }
         if (null == profileNameConfig) {
             builder.setCredentials(new ProfileCredentialsProvider());
         } else {
             builder.setCredentials(new ProfileCredentialsProvider(profileNameConfig));
         }
+        builder.withPathStyleAccessEnabled(usePathStyleAccess);
         builder.withClientConfiguration(clientConfiguration);
         return builder.build();
     }

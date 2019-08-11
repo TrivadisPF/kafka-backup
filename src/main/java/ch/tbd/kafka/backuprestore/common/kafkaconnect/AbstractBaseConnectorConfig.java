@@ -95,13 +95,34 @@ public abstract class AbstractBaseConnectorConfig extends AbstractConfig impleme
     private static final String S3_REGION_DEFAULT = Regions.DEFAULT_REGION.getName();
     private static final String S3_REGION_DISPLAY = "AWS region";
 
-    public static final String WAN_MODE_CONFIG = "s3.wan.mode";
-    private static final boolean WAN_MODE_DEFAULT = false;
-
+    public static final String S3_SERVICE_ENDPOINT_CONFIG = "s3.service.endpoint";
+    private static final String S3_SERVICE_ENDPOINT_DOC = "The Service endpoint to be used for requests.";
+    private static final String S3_SERVICE_ENDPOINT_DEFAULT = null;
+    private static final String S3_SERVICE_ENDPOINT_DISPLAY = "Service Endpoint";
+    
+    public static final String S3_WAN_MODE_CONFIG = "s3.wan.mode";
+    private static final String S3_WAN_MODE_DOC = "Use S3 accelerated endpoint.";
+    private static final boolean S3_WAN_MODE_DEFAULT = false;
+    private static final String S3_WAN_MODE_DISPLAY = "Use S3 Accelerated Endpoint";
+    
+    public static final String S3_PATH_STYLE_ACCESS_CONFIG = "s3.path.style.access";
+    private static final String S3_PATH_STYLE_ACCESS_DOC = "Enable path style access.";
+    private static final boolean S3_PATH_STYLE_ACCESS_DEFAULT = false;
+    private static final String S3_PATH_STYLE_ACCESS_DISPLAY = "S3 Path Style Access";
+    
+    public static final String AWS_SIGNER_OVERRIDE_CONFIG = "aws.signer.override";
+    private static final String AWS_SIGNER_OVERRIDE_DOC = "AWS Client Signer Override.";
+    private static final String AWS_SIGNER_OVERRIDE_DEFAULT = null;
+    private static final String AWS_SIGNER_OVERRIDE_DISPLAY = "AWS Client Signer Override";
+    
     public static final int S3_RETRY_MAX_BACKOFF_TIME_MS = (int) TimeUnit.HOURS.toMillis(24);
 
     public static final String S3_RETRY_BACKOFF_CONFIG = "s3.retry.backoff.ms";
+    private static final String S3_RETRY_BACKOFF_DOC = "How long to wait in milliseconds before attempting the first retry of a failed S3 request."
+    												+ "Upon a failure, this connector may wait up to twice as long as the previous wait, up to the maximum number of retries. "
+    										        + "This avoids retrying in a tight loop under failure scenarios.";
     public static final int S3_RETRY_BACKOFF_DEFAULT = 200;
+    private static final String S3_RETRY_BACKOFF_DISPLAY = "Retry backoff";
 
     public static final String S3_PART_RETRIES_CONFIG = "s3.part.retries";
     public static final int S3_PART_RETRIES_DEFAULT = 3;
@@ -279,11 +300,47 @@ public abstract class AbstractBaseConnectorConfig extends AbstractConfig impleme
                 S3_REGION_DISPLAY,
                 new RegionRecommender()
         );
+        
+        configDef.define(
+                S3_SERVICE_ENDPOINT_CONFIG,
+                Type.STRING,
+                S3_SERVICE_ENDPOINT_DEFAULT,
+                Importance.MEDIUM,
+                S3_SERVICE_ENDPOINT_DOC,
+                group,
+                ++orderInGroup,
+                Width.LONG,
+                S3_SERVICE_ENDPOINT_DISPLAY
+        );
+        
+        configDef.define(
+                AWS_SIGNER_OVERRIDE_CONFIG,
+                Type.STRING,
+                AWS_SIGNER_OVERRIDE_DEFAULT,
+                Importance.MEDIUM,
+                AWS_SIGNER_OVERRIDE_DOC,
+                group,
+                ++orderInGroup,
+                Width.LONG,
+                AWS_SIGNER_OVERRIDE_DISPLAY
+        );
+        
+        configDef.define(
+                S3_PATH_STYLE_ACCESS_CONFIG,
+                Type.BOOLEAN,
+                S3_PATH_STYLE_ACCESS_DEFAULT,
+                Importance.MEDIUM,
+                S3_PATH_STYLE_ACCESS_DOC,
+                group,
+                ++orderInGroup,
+                Width.LONG,
+                S3_PATH_STYLE_ACCESS_DISPLAY
+        );
 
         configDef.define(
-                WAN_MODE_CONFIG,
+                S3_WAN_MODE_CONFIG,
                 Type.BOOLEAN,
-                WAN_MODE_DEFAULT,
+                S3_WAN_MODE_DEFAULT,
                 Importance.MEDIUM,
                 "Use S3 accelerated endpoint.",
                 group,
@@ -393,6 +450,15 @@ public abstract class AbstractBaseConnectorConfig extends AbstractConfig impleme
 
     public String getRegionConfig() {
         return getString(S3_REGION_CONFIG);
+    }
+    public String getServiceEndpointConfig() {
+    	return getString(S3_SERVICE_ENDPOINT_CONFIG);
+    }
+    public boolean usePathStyleAccess() {
+    	return getBoolean(S3_PATH_STYLE_ACCESS_CONFIG);
+    }
+    public String getAWSSignerOverrideConfig() {
+    	return getString(AWS_SIGNER_OVERRIDE_CONFIG);
     }
     public long getRotateIntervalMs() {
         return getLong(ROTATE_INTERVAL_MS_CONFIG);

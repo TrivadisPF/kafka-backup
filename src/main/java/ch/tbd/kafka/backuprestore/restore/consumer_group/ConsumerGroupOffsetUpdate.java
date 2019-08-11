@@ -208,10 +208,11 @@ public class ConsumerGroupOffsetUpdate {
             profileName = configuration.getPropertiesS3Amazon().getProperty(S3_PROFILE_NAME_CONFIG);
         }
         String regionConfig = configuration.getPropertiesS3Amazon().getProperty(S3_REGION_CONFIG);
+        String serviceEndpoint = configuration.getPropertiesS3Amazon().getProperty(S3_SERVICE_ENDPOINT_CONFIG);
 
         boolean wanModeConfig = false;
-        if (configuration.getPropertiesS3Amazon().containsKey(WAN_MODE_CONFIG)) {
-            wanModeConfig = Boolean.valueOf(configuration.getPropertiesS3Amazon().getProperty(WAN_MODE_CONFIG));
+        if (configuration.getPropertiesS3Amazon().containsKey(S3_WAN_MODE_CONFIG)) {
+            wanModeConfig = Boolean.valueOf(configuration.getPropertiesS3Amazon().getProperty(S3_WAN_MODE_CONFIG));
         }
 
         String proxyUrlConfig = null;
@@ -230,6 +231,9 @@ public class ConsumerGroupOffsetUpdate {
         }
 
         Password proxyPass = new Password(proxyPassStr);
+        
+        boolean usePathStyleAccess = new Boolean(configuration.getPropertiesS3Amazon().getProperty(S3_PATH_STYLE_ACCESS_CONFIG));
+        String awsSignerOverride = configuration.getPropertiesS3Amazon().getProperty(AWS_SIGNER_OVERRIDE_CONFIG);
 
         Integer s3RetryBackoffConfig = 200;
         if (configuration.getPropertiesS3Amazon().containsKey(S3_RETRY_BACKOFF_CONFIG)) {
@@ -246,8 +250,8 @@ public class ConsumerGroupOffsetUpdate {
             headersUseExpectContinue = Boolean.valueOf(configuration.getPropertiesS3Amazon().getProperty(HEADERS_USE_EXPECT_CONTINUE_CONFIG));
         }
 
-        AmazonS3 amazonS3 = AmazonS3Utils.initConnection(profileName, regionConfig, wanModeConfig, proxyUrlConfig,
-                proxyUser, proxyPass, s3RetryBackoffConfig, s3PartRetriesConfig, headersUseExpectContinue);
+        AmazonS3 amazonS3 = AmazonS3Utils.initConnection(profileName, serviceEndpoint, regionConfig, wanModeConfig, proxyUrlConfig,
+                proxyUser, proxyPass, usePathStyleAccess, awsSignerOverride, s3RetryBackoffConfig, s3PartRetriesConfig, headersUseExpectContinue);
 
         if (!configuration.getPropertiesS3Amazon().containsKey(S3_TOPIC_NAME_KEY)) {
             throw new IllegalArgumentException("No topic name to read on S3 configured. Please check the configuration");
