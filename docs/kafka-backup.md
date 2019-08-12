@@ -1,12 +1,8 @@
 # Kafka Backup & Restore
 
-## Kafka Backup connector guide
+## Kafka Backup Sink Connector Configuration Options
 
-An Apache Kafka connect sink connector for doing backups of Kafka topics to Amazon S3. For more information about configuring connectors in general see the official Confluent documentation.
-
-### Sink Connector Configuration Options
-
-To use this connector, specify the name of the connector class in the connector.class configuration property.
+To use this connector, specify the name of the connector class in the `connector.class` configuration property.
 
 `connector.class=ch.tbd.kafka.backuprestore.backup.kafkaconnect.BackupSinkConnector`
 
@@ -59,9 +55,10 @@ The time interval in milliseconds to invoke file commits. This configuration ens
 
 `s3.bucket.name`
 
-The name of the S3 Bucket to write the backup data to
+The name of the S3 Bucket to write the backup data to.
 
   * Type: string 
+  * Valid Values: [us-gov-west-1, ap-northeast-1, ap-northeast-2, ap-south-1, ap-southeast-1, ap-southeast-2, ca-central-1, eu-central-1, eu-west-1, eu-west-2, sa-east-1, us-east-1, us-east-2, us-west-1, us-west-2, cn-north-1]
   * Importance: high
  
 `s3.profile.name`
@@ -73,9 +70,11 @@ The profile to use in the Amazon configuration
 
 `s3.ssea.name` 
 
-The S3 Server Side Encryption Algorithm
+The S3 Server Side Encryption Algorithm.
 
   * Type: string 
+  * Default: ""
+  * Valid Values: [, AES256, aws:kms]
   * Importance: low
   
 `s3.sse.customer.key`
@@ -83,6 +82,7 @@ The S3 Server Side Encryption Algorithm
 The S3 Server Side Encryption Customer-Provided Key (SSE-C). 
 
   * Type: password 
+  * Default: [hidden]
   * Importance: low
 
 `s3.sse.kms.key.id`
@@ -90,6 +90,7 @@ The S3 Server Side Encryption Customer-Provided Key (SSE-C).
 The name of the AWS Key Management Service (AWS-KMS) key to be used for server side encryption of the S3 objects. 
 
   * Type: string 
+  * Default: ""
   * Importance: low
 
 `s3.acl.canned`
@@ -97,6 +98,8 @@ The name of the AWS Key Management Service (AWS-KMS) key to be used for server s
 An S3 canned ACL header value to apply when writing objects 
 
   * Type: string
+  * Default: null
+  * Valid Values: [private, public-read, public-read-write, authenticated-read, log-delivery-write, bucket-owner-read, bucket-owner-full-control, aws-exec-read]
   * Importance: low
   
 `s3.proxy.url`
