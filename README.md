@@ -1,6 +1,6 @@
 # Kafka Connect for Backup & Restore
 
-kafka-connect-backup-restore is a Kafka Connector for doing backup and restore of Kafka Topics to Amazon S3. 
+kafka-connect-backup-restore is a Kafka Connector for doing backup and restore of Kafka Topics to Amazon S3. This is a joint effort of Swiss Post and Trivadis.
 
 Documentation for this connector can be found [here](docs/README.md).
 

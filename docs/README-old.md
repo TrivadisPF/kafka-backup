@@ -1,4 +1,4 @@
-# Backup
+# Kafka Connector for Backup & Restore
 
 The backup can be started on a topic base and will consume all the partitions of the topic to be backed-up and write it to a bucket in object storage. The following diagram shows the schematics of the Backup solution:
 
