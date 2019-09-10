@@ -2,6 +2,9 @@ package ch.tbd.kafka.backuprestore.backup.kafkaconnect.config;
 
 import ch.tbd.kafka.backuprestore.backup.storage.CompressionType;
 import ch.tbd.kafka.backuprestore.common.kafkaconnect.AbstractBaseConnectorConfig;
+
+import org.apache.avro.file.Codec;
+import org.apache.avro.file.CodecFactory;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
@@ -30,6 +33,11 @@ public class BackupSinkConnectorConfig extends AbstractBaseConnectorConfig {
     private static final String COMPRESSION_TYPE_CONFIG = "s3.compression.type";
     private static final String COMPRESSION_TYPE_DEFAULT = "none";
 
+    private static final String AVRO_COMPRESSION_CODEC_CONFIG = "avro.compression.codec";
+    private static final String AVRO_COMPRESSION_CODEC_DOC =
+            "The Avro Compression Codec to use. Either null, deflate or snappy.";
+    private static final String AVRO_COMPRESSION_CODEC_DEFAULT = "null";
+    
     private static final String FLUSH_SIZE_CONFIG = "flush.size";
     private static final String FLUSH_SIZE_DOC =
             "Number of records written to store before invoking file commits.";
@@ -140,6 +148,19 @@ public class BackupSinkConnectorConfig extends AbstractBaseConnectorConfig {
         );
 
         configDef.define(
+                AVRO_COMPRESSION_CODEC_CONFIG,
+                Type.STRING,
+                AVRO_COMPRESSION_CODEC_DEFAULT,
+                new AvroCodecValidator(),
+                Importance.LOW,
+                AVRO_COMPRESSION_CODEC_DOC,
+                group,
+                ++orderInGroup,
+                Width.LONG,
+                "Avro Compression Codec"
+        );
+        
+        configDef.define(
                 FLUSH_SIZE_CONFIG,
                 Type.INT,
                 Importance.HIGH,
@@ -203,6 +224,10 @@ public class BackupSinkConnectorConfig extends AbstractBaseConnectorConfig {
 
     public CompressionType getCompressionType() {
         return CompressionType.forName(getString(COMPRESSION_TYPE_CONFIG));
+    }
+
+    public CodecFactory getAvroCompressionCodec() {
+        return CodecFactory.fromString(getString(AVRO_COMPRESSION_CODEC_CONFIG));
     }
 
     public int getFlushSize() {
@@ -278,5 +303,36 @@ public class BackupSinkConnectorConfig extends AbstractBaseConnectorConfig {
         }
     }
 
+    private static class AvroCodecValidator implements ConfigDef.Validator {
+        public static final Map<String, CodecFactory> TYPES_BY_NAME = new HashMap<>();
+        public static final String ALLOWED_VALUES;
+
+        static {
+            List<String> names = new ArrayList<>();
+            
+            names.add(CodecFactory.nullCodec().toString());
+            names.add(CodecFactory.snappyCodec().toString());
+            names.add(CodecFactory.bzip2Codec().toString());
+            names.add("deflate");
+            names.add("xz");
+            for (String name : names) {
+            	TYPES_BY_NAME.put(name, CodecFactory.fromString(name));
+            }
+            ALLOWED_VALUES = Utils.join(names, ", ");
+        }
+
+        @Override
+        public void ensureValid(String name, Object avroCodec) {
+            String compressionCodecString = ((String) avroCodec).trim();
+            if (!TYPES_BY_NAME.containsKey(compressionCodecString)) {
+                throw new ConfigException(name, avroCodec, "Value must be one of: " + ALLOWED_VALUES);
+            }
+        }
+
+        @Override
+        public String toString() {
+            return "[" + ALLOWED_VALUES + "]";
+        }
+    }
 }
 

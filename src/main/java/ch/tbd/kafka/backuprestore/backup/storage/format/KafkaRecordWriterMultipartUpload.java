@@ -56,8 +56,7 @@ public class KafkaRecordWriterMultipartUpload implements RecordWriter {
             schema = sinkRecord.valueSchema();
             try {
                 s3out = new S3OutputStream(key(sinkRecord), conf, amazonS3);
-                //TODO: Manage codec
-                dataFileWriter.setCodec(CodecFactory.fromString("null"));
+                dataFileWriter.setCodec(conf.getAvroCompressionCodec());
                 dataFileWriter.create(AvroKafkaRecord.getClassSchema(), s3out);
             } catch (IOException e) {
                 throw new ConnectException(e);
