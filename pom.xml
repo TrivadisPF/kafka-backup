@@ -82,7 +82,7 @@
     <properties>
         <kafka.version>2.2.0</kafka.version>
         <confluent.version>5.2.1</confluent.version>
-        <s3.version>1.11.570</s3.version>
+        <s3.version>1.12.261</s3.version>
         <guava.version>18.0</guava.version>
         <avro.version>1.8.2</avro.version>
 	    <commons-cli.version>1.4</commons-cli.version>
